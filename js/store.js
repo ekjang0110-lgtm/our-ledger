@@ -1,0 +1,84 @@
+// 저장소: Supabase(실사용) / 메모리(데모·테스트)
+const URL_ = 'https://nmaibecunwprpuunizuu.supabase.co';
+const KEY_ = 'sb_publishable_J_aN_rr5fjloNj5S0iMEhQ_TplbuOQr';
+const CARD_COLS = ['card', 'person', 'approval_no', 'used_date', 'used_time', 'merchant', 'raw_amount', 'amount', 'canceled', 'inst_months', 'status', 'pay_due', 'issuer_discount', 'category', 'fixed', 'label', 'adjustment', 'prepaid', 'memo', 'source', 'raw', 'settle', 'settle_done', 'onnuri', 'onnuri_shared'];
+const BANK_COLS = ['tx_date', 'account', 'memo', 'deposit', 'withdrawal', 'category', 'fixed', 'note', 'source', 'source_ref'];
+const pick = (o, cols) => Object.fromEntries(cols.filter(c => o[c] !== undefined).map(c => [c, o[c]]));
+const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+const fail = e => { if (e) throw new Error(e.message || String(e)); };
+
+export function supabaseStore() {
+  const sb = window.supabase.createClient(URL_, KEY_, { auth: { persistSession: true, autoRefreshToken: true } });
+  let hid = null;
+  const all = async (table, order) => { const out = []; for (let from = 0; ; from += 1000) { const { data, error } = await sb.from(table).select('*').order(order).range(from, from + 999); fail(error); out.push(...data); if (data.length < 1000) break; } return out; };
+  return {
+    mode: 'supabase',
+    async session() { const { data } = await sb.auth.getSession(); return data.session; },
+    onAuth(cb) { sb.auth.onAuthStateChange((ev, s) => cb(ev, s)); },
+    async signIn(email, password) { const { error } = await sb.auth.signInWithPassword({ email, password }); fail(error); },
+    async signUp(email, password) { const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }); fail(error); return !!data.session; },
+    async signOut() { await sb.auth.signOut(); hid = null; },
+    async membership() {
+      const { data, error } = await sb.from('ledger_members').select('household_id,user_id,display_name'); fail(error);
+      if (!data.length) return null; hid = data[0].household_id;
+      const { data: h, error: e2 } = await sb.from('ledger_households').select('id,name,invite_code,max_members').single(); fail(e2);
+      const { data: u } = await sb.auth.getUser();
+      return { household: h, members: data, me: data.find(m => m.user_id === u.user.id) };
+    },
+    async create(name, display) { const { error } = await sb.rpc('ledger_create', { p_name: name, p_display: display }); fail(error); },
+    async join(code, display) { const { error } = await sb.rpc('ledger_join', { p_code: code.trim().toUpperCase(), p_name: display }); fail(error); },
+    async loadAll() {
+      const [docs, card_tx, bank_tx, card_bills, closes] = await Promise.all([all('ledger_docs', 'key'), all('ledger_card_tx', 'id'), all('ledger_bank_tx', 'id'), all('ledger_card_bills', 'bill_month'), all('ledger_closes', 'month')]);
+      return { docs: Object.fromEntries(docs.map(d => [d.key, d.value])), card_tx, bank_tx, card_bills, closes };
+    },
+    async saveDoc(key, value) { const { error } = await sb.from('ledger_docs').upsert({ household_id: hid, key, value }); fail(error); },
+    async insertCards(rows) { const out = []; for (const part of chunk(rows, 300)) { const { data, error } = await sb.from('ledger_card_tx').insert(part.map(r => ({ ...pick(r, CARD_COLS), household_id: hid }))).select(); fail(error); out.push(...data); } return out; },
+    async updateCard(id, patch) { const { data, error } = await sb.from('ledger_card_tx').update(pick(patch, CARD_COLS)).eq('id', id).select().single(); fail(error); return data; },
+    async deleteCard(id) { const { error } = await sb.from('ledger_card_tx').delete().eq('id', id); fail(error); },
+    async insertBank(rows) { const out = []; for (const part of chunk(rows, 300)) { const { data, error } = await sb.from('ledger_bank_tx').insert(part.map(r => ({ ...pick(r, BANK_COLS), household_id: hid }))).select(); fail(error); out.push(...data); } return out; },
+    async updateBank(id, patch) { const { data, error } = await sb.from('ledger_bank_tx').update(pick(patch, BANK_COLS)).eq('id', id).select().single(); fail(error); return data; },
+    async deleteBank(id) { const { error } = await sb.from('ledger_bank_tx').delete().eq('id', id); fail(error); },
+    async importBank(account, rows, synced) { const { data, error } = await sb.rpc('ledger_import_bank', { p_account: account, p_rows: rows, p_synced: synced }); fail(error); return data; },
+    async setBill(bill_month, card, actual, note) { const row = { household_id: hid, bill_month, card, actual, note: note || '' }; const { error } = await sb.from('ledger_card_bills').upsert(row); fail(error); return row; },
+    async saveClose(month, snapshot, memo) { const { data: u } = await sb.auth.getUser(); const row = { household_id: hid, month, snapshot, memo: memo || '', closed_at: new Date().toISOString(), closed_by: u.user.id }; const { error } = await sb.from('ledger_closes').upsert(row); fail(error); return row; },
+    async audit() { const { data, error } = await sb.from('ledger_audit').select('*').order('id', { ascending: false }).limit(200); fail(error); return data; },
+  };
+}
+
+export function demoStore(seed) {
+  let id = 1; const db = { docs: structuredClone(seed.docs || {}), card_tx: (seed.card_tx || []).map(r => ({ ...r, id: id++ })), bank_tx: (seed.bank_tx || []).map(r => ({ ...r, id: id++ })), card_bills: [], closes: [] };
+  const log = [];
+  return {
+    mode: 'demo',
+    async session() { return { user: { id: 'demo', email: 'demo@local' } }; }, onAuth() { }, async signIn() { }, async signUp() { return true; }, async signOut() { },
+    async membership() { return { household: { id: 'demo', name: '데모 가계부', invite_code: 'DEMO', max_members: 2 }, members: [{ user_id: 'demo', display_name: '은경' }], me: { user_id: 'demo', display_name: '은경' } }; },
+    async create() { }, async join() { },
+    async loadAll() { return structuredClone(db); },
+    async saveDoc(k, v) { db.docs[k] = structuredClone(v); },
+    async insertCards(rows) { const out = rows.map(r => ({ ...pick(r, CARD_COLS), id: id++ })); db.card_tx.push(...out); return structuredClone(out); },
+    async updateCard(i, patch) { const r = db.card_tx.find(x => x.id === i); const before = { ...r }; Object.assign(r, pick(patch, CARD_COLS)); log.unshift({ id: log.length + 1, tbl: 'ledger_card_tx', row_id: String(i), action: 'update', actor: 'demo', before, after: { ...r }, at: new Date().toISOString() }); return { ...r }; },
+    async deleteCard(i) { db.card_tx = db.card_tx.filter(x => x.id !== i); },
+    async insertBank(rows) { const out = rows.map(r => ({ ...pick(r, BANK_COLS), id: id++ })); db.bank_tx.push(...out); return structuredClone(out); },
+    async updateBank(i, patch) { const r = db.bank_tx.find(x => x.id === i); Object.assign(r, pick(patch, BANK_COLS)); return { ...r }; },
+    async deleteBank(i) { db.bank_tx = db.bank_tx.filter(x => x.id !== i); },
+    // 서버 함수 ledger_import_bank_core와 같은 규칙(데모용)
+    async importBank(account, rows, synced) {
+      const m = db.docs.master || {}; const open = m.opening_date || '1900-01-01'; const r0 = { inserted: 0, matched: 0, duplicate: 0, before_opening: 0 }; let last = null;
+      for (const r of rows.slice().sort((a, b) => a.source_ref.localeCompare(b.source_ref))) {
+        if (r.tx_date < open) { r0.before_opening++; continue; } if (!last || r.source_ref > last.source_ref) last = r;
+        if (db.bank_tx.some(b => b.source_ref === r.source_ref)) { r0.duplicate++; continue; }
+        const hit = db.bank_tx.filter(b => b.account === account && b.tx_date === r.tx_date && (b.deposit || 0) === r.deposit && (b.withdrawal || 0) === r.withdrawal && !String(b.source_ref || '').startsWith('toss|') && b.source !== 'toss').sort((a, b) => a.id - b.id)[0];
+        if (hit) { hit.source_ref = r.source_ref; if (!hit.note) hit.note = r.note; r0.matched++; continue; }
+        let category = '', fixed = false;
+        if (r.kind === '이자입금') category = '부수입'; else if (r.kind === '자동이체') { category = '고정'; fixed = true; } else if (r.deposit > 0 && (m.incomes || []).some(i => Number(i.amount) === r.deposit)) category = '급여';
+        else { const prev = db.bank_tx.filter(b => b.account === account && b.memo === r.memo && b.category && b.source === 'toss' && (b.deposit > 0) === (r.deposit > 0)).sort((a, b) => b.tx_date.localeCompare(a.tx_date) || b.id - a.id)[0]; if (prev) { category = prev.category; fixed = !!prev.fixed; } }
+        db.bank_tx.push({ id: id++, tx_date: r.tx_date, account, memo: r.memo, deposit: r.deposit, withdrawal: r.withdrawal, category, fixed, note: r.note, source: 'toss', source_ref: r.source_ref }); r0.inserted++;
+      }
+      m.bank_sync = { ...(m.bank_sync || {}), [account]: { synced, at: new Date().toISOString(), ref: 'app', last_date: last && last.tx_date, last_ref: last && last.source_ref, balance: last && last.balance } }; db.docs.master = m;
+      return r0;
+    },
+    async setBill(bill_month, card, actual, note) { db.card_bills = db.card_bills.filter(b => !(b.bill_month === bill_month && b.card === card)); const row = { bill_month, card, actual, note: note || '' }; db.card_bills.push(row); return row; },
+    async saveClose(month, snapshot, memo) { db.closes = db.closes.filter(c => c.month !== month); const row = { month, snapshot, memo: memo || '', closed_at: new Date().toISOString(), closed_by: 'demo' }; db.closes.push(row); return row; },
+    async audit() { return log; },
+  };
+}
