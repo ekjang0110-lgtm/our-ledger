@@ -7,6 +7,8 @@ const pick = (o, cols) => Object.fromEntries(cols.filter(c => o[c] !== undefined
 const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 const fail = e => { if (e) throw new Error(e.message || String(e)); };
 
+// 비어 있으면 안 되는 카드 열(DB not null)의 기본값
+const cardDefaults = r => ({ settle: r.settle ?? 0, settle_done: r.settle_done ?? false, onnuri: Number.isFinite(Number(r.onnuri)) && r.onnuri !== null && r.onnuri !== undefined ? Number(r.onnuri) : 0, onnuri_shared: r.onnuri_shared ?? false, adjustment: r.adjustment ?? 0, prepaid: r.prepaid ?? 0, issuer_discount: r.issuer_discount ?? 0 });
 export function supabaseStore() {
   const sb = window.supabase.createClient(URL_, KEY_, { auth: { persistSession: true, autoRefreshToken: true } });
   let hid = null;
@@ -32,7 +34,7 @@ export function supabaseStore() {
       return { docs: Object.fromEntries(docs.map(d => [d.key, d.value])), card_tx, bank_tx, card_bills, closes };
     },
     async saveDoc(key, value) { const { error } = await sb.from('ledger_docs').upsert({ household_id: hid, key, value }); fail(error); },
-    async insertCards(rows) { const out = []; for (const part of chunk(rows, 300)) { const { data, error } = await sb.from('ledger_card_tx').insert(part.map(r => ({ ...pick(r, CARD_COLS), household_id: hid }))).select(); fail(error); out.push(...data); } return out; },
+    async insertCards(rows) { const out = []; for (const part of chunk(rows, 300)) { const { data, error } = await sb.from('ledger_card_tx').insert(part.map(r => ({ ...pick(r, CARD_COLS), ...cardDefaults(r), household_id: hid })), { defaultToNull: false }).select(); fail(error); out.push(...data); } return out; },
     async updateCard(id, patch) { const { data, error } = await sb.from('ledger_card_tx').update(pick(patch, CARD_COLS)).eq('id', id).select().single(); fail(error); return data; },
     async deleteCard(id) { const { error } = await sb.from('ledger_card_tx').delete().eq('id', id); fail(error); },
     async insertBank(rows) { const out = []; for (const part of chunk(rows, 300)) { const { data, error } = await sb.from('ledger_bank_tx').insert(part.map(r => ({ ...pick(r, BANK_COLS), household_id: hid }))).select(); fail(error); out.push(...data); } return out; },
@@ -55,7 +57,7 @@ export function demoStore(seed) {
     async create() { }, async join() { },
     async loadAll() { return structuredClone(db); },
     async saveDoc(k, v) { db.docs[k] = structuredClone(v); },
-    async insertCards(rows) { const out = rows.map(r => ({ ...pick(r, CARD_COLS), id: id++ })); db.card_tx.push(...out); return structuredClone(out); },
+    async insertCards(rows) { const out = rows.map(r => ({ ...pick(r, CARD_COLS), ...cardDefaults(r), id: id++ })); db.card_tx.push(...out); return structuredClone(out); },
     async updateCard(i, patch) { const r = db.card_tx.find(x => x.id === i); const before = { ...r }; Object.assign(r, pick(patch, CARD_COLS)); log.unshift({ id: log.length + 1, tbl: 'ledger_card_tx', row_id: String(i), action: 'update', actor: 'demo', before, after: { ...r }, at: new Date().toISOString() }); return { ...r }; },
     async deleteCard(i) { db.card_tx = db.card_tx.filter(x => x.id !== i); },
     async insertBank(rows) { const out = rows.map(r => ({ ...pick(r, BANK_COLS), id: id++ })); db.bank_tx.push(...out); return structuredClone(out); },
