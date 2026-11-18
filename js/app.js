@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=11';
-import { supabaseStore, demoStore } from './store.js?v=11';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=11';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=11';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=11';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=11';
+import * as C from './calc.js?v=12';
+import { supabaseStore, demoStore } from './store.js?v=12';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=12';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=12';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=12';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=12';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -252,11 +252,14 @@ const stagePending = (r, st) => !!(st.category || st.fixed || (st.memo !== undef
 function stageList() { return S.ctx.rows.filter(r => r.useMonth === S.month && r.unclassified).map(r => ({ r, st: stageOf(r) })).filter(x => stagePending(x.r, x.st)); }
 // 여러 건 선택(체크박스 · PC 우클릭) → 카테고리 한 번에 바꾸기
 function bulkBar(rs) {
-  const cats = master().card_categories || []; const allOn = rs.length && rs.every(r => S.sel.has(r.id));
-  return `<div class="applybar bulk on" id="bulkbar"><span><b>${S.sel.size}건</b> 선택</span>
+  const cats = master().card_categories || []; const allOn = rs.length && rs.every(r => S.sel.has(r.id)); const own = bulkOwn().length;
+  const n = S.bulkCat ? S.sel.size : own;
+  return `<div class="applybar bulk on" id="bulkbar"><span><b>${S.sel.size}건</b> 선택 <small class="muted">${S.bulkCat ? '→ 모두 아래에서 고른 분류로 바뀝니다' : `· 각 줄에서 고른 분류 ${own}건 반영 (아래를 누르면 선택 전체를 한 분류로)`}</small></span>
     <div class="pick">${cats.map(c => `<button class="pk ${S.bulkCat === c ? 'on' : ''}" data-act="bulkPick" data-cat="${esc(c)}">${S.bulkCat === c ? '✔ ' : ''}${esc(c)}</button>`).join('')}<button class="pk fx ${S.bulkCat === '__fixed' ? 'on' : ''}" data-act="bulkPick" data-cat="__fixed">${S.bulkCat === '__fixed' ? '✔ ' : ''}고정</button><button class="pk ${S.bulkCat === '__none' ? 'on' : ''}" data-act="bulkPick" data-cat="__none">${S.bulkCat === '__none' ? '✔ ' : ''}미분류로</button></div>
-    <div class="row gap"><button class="btn ghost sm" data-act="selAll">${allOn ? '전체 해제' : '보이는 것 전체 선택'}</button><button class="btn ghost sm" data-act="selClear">선택 해제</button><button class="btn" data-act="bulkApply" ${S.bulkCat ? '' : 'disabled'}>✔ ${S.sel.size}건 반영</button></div></div>`;
+    <div class="row gap"><button class="btn ghost sm" data-act="selAll">${allOn ? '전체 해제' : '보이는 것 전체 선택'}</button><button class="btn ghost sm" data-act="selClear">선택 해제</button><button class="btn" data-act="bulkApply" ${n ? '' : 'disabled'}>✔ ${n}건 반영</button></div></div>`;
 }
+// 선택한 건 중 각 줄에서 카테고리를 골라 둔 것(일괄 분류를 고르지 않았을 때 반영 대상)
+function bulkOwn() { return [...S.sel].map(id => S.ctx.rows.find(r => r.id === id)).filter(r => r && r.unclassified && S.stage[r.id] && (S.stage[r.id].category || S.stage[r.id].fixed)); }
 function applyBar() {
   const list = stageList(); const auto = list.filter(x => x.st.auto).length;
   return `<div class="applybar ${list.length ? 'on' : ''}" id="applybar">${list.length ? `<span><b>${list.length}건</b> 선택됨${auto ? ` <small>(자동 제안 ${auto}건 포함)</small>` : ''}</span><button class="btn ghost" data-act="stageClear">선택 지우기</button><button class="btn" data-act="stageApply">✔ 한 번에 반영</button>` : '<span class="muted">미분류 건의 카테고리를 눌러 선택해 두고, 다 고른 뒤 한 번에 반영하세요.</span>'}</div>`;
@@ -592,9 +595,11 @@ const ACT = {
   selAll() { const rs = cardRows(); const all = rs.every(r => S.sel.has(r.id)); rs.forEach(r => all ? S.sel.delete(r.id) : S.sel.add(r.id)); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
   selClear() { S.sel.clear(); S.bulkCat = ''; keepScroll(); },
   bulkPick(el) { S.bulkCat = S.bulkCat === el.dataset.cat ? '' : el.dataset.cat; keepScroll(); },
-  bulkApply() { const ids = [...S.sel], c = S.bulkCat; if (!ids.length || !c) return;
-    const patch = c === '__fixed' ? { fixed: true } : c === '__none' ? { category: '', fixed: false } : { category: c, fixed: false };
-    run(async () => { for (const id of ids) { Object.assign(S.data.card_tx.find(x => x.id === id), await S.store.updateCard(id, patch)); delete S.stage[id]; } S.sel.clear(); S.bulkCat = ''; rebuild(); keepScroll(); }, `${ids.length}건을 바꿨습니다.`); },
+  bulkApply() { const c = S.bulkCat;
+    const jobs = c ? [...S.sel].map(id => [id, c === '__fixed' ? { fixed: true } : c === '__none' ? { category: '', fixed: false } : { category: c, fixed: false }])
+      : bulkOwn().map(r => { const st = S.stage[r.id]; return [r.id, { category: st.category || '', fixed: !!st.fixed, label: st.fixed && st.label ? st.label : (r.label || ''), memo: st.memo !== undefined ? st.memo.trim() : (r.memo || '') }]; });
+    if (!jobs.length) return;
+    run(async () => { for (const [id, patch] of jobs) { Object.assign(S.data.card_tx.find(x => x.id === id), await S.store.updateCard(id, patch)); delete S.stage[id]; S.sel.delete(id); } if (c) S.sel.clear(); S.bulkCat = ''; rebuild(); keepScroll(); }, `${jobs.length}건을 반영했습니다.`); },
   cardEdit(el) { cardModal(S.ctx.rows.find(r => r.id === Number(el.dataset.id))); },
   cardNew() { cardModal(null); },
   noop() { },
