@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=6';
-import { supabaseStore, demoStore } from './store.js?v=6';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=6';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=6';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=6';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=6';
+import * as C from './calc.js?v=7';
+import { supabaseStore, demoStore } from './store.js?v=7';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=7';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=7';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=7';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=7';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -40,6 +40,16 @@ async function enter() {
   } catch (e) { console.error(e); app.innerHTML = `<div class="boot">연결하지 못했습니다.<br><small>${esc(e.message)}</small><br><button class="btn" onclick="location.reload()">다시 시도</button></div>`; }
 }
 
+// ---------- 모바일: 넓은 표를 카드형 줄로 바꿀 수 있게 각 칸에 제목을 붙인다(화면 폭이 좁을 때만 CSS가 적용)
+function mobilize(root) {
+  root.querySelectorAll('table.tbl').forEach(t => {
+    if (t.classList.contains('board') || t.classList.contains('sched') || t.dataset.rt) return;
+    const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim()); if (heads.length < 4) return;
+    const mh = Number(t.dataset.mhead || 1); t.dataset.rt = '1'; t.classList.add('rt');
+    t.querySelectorAll('tbody tr').forEach(tr => { const tds = [...tr.children]; if (tds.length === 1) { tr.classList.add('full'); return; }
+      tds.forEach((td, i) => { if (i < mh) td.classList.add('h'); else td.dataset.l = heads[i] || ''; if (!td.textContent.trim() && !td.querySelector('input,button,select')) td.classList.add('e'); }); });
+  });
+}
 // ---------- 지문·얼굴 잠금
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenAt = Date.now(); else if (S.unlocked && bioEnabled() && hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) { S.unlocked = false; enter(); } });
@@ -78,6 +88,7 @@ function render() {
   <nav class="tabbar">${NAV.map(n => `<a href="#/${n[0]}" class="${S.route === n[0] ? 'on' : ''}"><i>${n[2]}</i>${n[1]}</a>`).join('')}</nav></div>`;
   const mp = document.querySelector('#monthpick'); if (mp) mp.onchange = () => { if (mp.value) { S.month = mp.value; render(); } };
   const bb = document.querySelector('#biobox'); if (bb) bioAvailable().then(ok => { bb.innerHTML = !ok ? '<span class="muted small">이 기기·브라우저는 지문·얼굴 잠금을 지원하지 않습니다.</span>' : bioEnabled() ? '<span class="tag ok">✔ 지문·얼굴 잠금 켜짐</span><button class="btn ghost sm" data-act="bioOff">끄기</button>' : '<span class="muted small">앱을 열 때 지문·얼굴로 확인합니다.</span><button class="btn sm" data-act="bioOn">지문·얼굴 잠금 켜기</button>'; });
+  mobilize(app);
   if (S.flash) { S.flash = ''; setTimeout(() => document.querySelector('.flash')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60); }
 }
 
@@ -138,7 +149,7 @@ function viewHome() {
   ${todo.length ? `<section class="card"><div class="sechead"><h2>확인할 것 ${todo.length}가지</h2><span class="muted small">누르면 해당 화면으로 가서 고칠 곳을 표시합니다</span></div><div class="todos">${todo.map(t => { const inner = `<b class="tn">!</b><div><strong>${esc(t[1])} <em>${esc(t[2])}</em></strong><small>${esc(t[3])}</small></div>${t[4] ? '<i>›</i>' : ''}`; return t[4] ? `<a class="todoitem" href="${t[4]}" data-act="todo" data-flash="${t[5]}" ${t[6] !== undefined ? `data-kind="${t[6]}"` : ''}>${inner}</a>` : `<div class="todoitem">${inner}</div>`; }).join('')}</div></section>` : ''}
   <div class="grid2"><div class="col">
   ${sec('자금 흐름 · 모임통장 잔액', !cf.tracked ? '<div class="empty">기초잔액 기준일 이전 달이라 잔액을 계산하지 않습니다.</div>' : `${cf.check ? `<div class="chk ${cf.check.diff ? 'bad' : ''}">${cf.check.diff ? `▲ 은행 잔액과 ${won(Math.abs(cf.check.diff))}원 차이` : '✔ 은행 잔액과 일치'} <small>${cf.check.date} 기준 은행 ${won(cf.check.bank)} · 장부 ${won(cf.check.mine)}</small></div>` : ''}
-    <table class="tbl tl"><thead><tr><th class="r">일</th><th>내용</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>
+    <table class="tbl tl" data-mhead="2"><thead><tr><th class="r">일</th><th>내용</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>
     <tr class="sum"><td></td><td>월초 잔액 <small class="muted">${s.cashflow.rows.some(r => r.next) || (master().incomes || []).some(i => i.early) ? '(이번 달분 선지급 월급 포함)' : ''}</small></td><td></td><td></td><td class="r">${won(cf.start)}</td></tr>${tlRows}
     <tr class="sum"><td></td><td>예상 월말${cf.nextSalary ? ` <small class="muted">다음 달 월급 빼면 ${won(cf.end - cf.nextSalary)}</small>` : ''}</td><td></td><td></td><td class="r ${cf.end < 0 ? 'neg' : ''}">${won(cf.end)}</td></tr></tbody></table>
     <p class="muted small">실제 = 통장에 기록된 거래, 예정 = 운영 규칙으로 만든 일정입니다. 월초(${cf.fixedDay}일)에 고정지출을 개인통장으로 한 번에 빼고, ${cf.cardDay}일에 급여를 받은 뒤 카드대금(청구서 금액, 없으면 승인기준)과 용돈을 개인통장으로 보내며, 카드사 자동이체는 개인통장에서 나갑니다. 날짜는 기초 데이터 > 분류·기준에서 바꿉니다.</p>`)}
@@ -315,7 +326,7 @@ function viewBank() {
     return `<div class="chk ${d ? 'bad' : ''}">${d ? `▲ 은행 잔액과 ${won(Math.abs(d))}원 차이 — 빠진 거래가 있는지 확인하세요` : '✔ 은행 잔액과 일치'} <small>${esc(acc || '모임통장')} · 은행 내역 ${sy.synced || ''}까지 반영(${String(sy.at || '').slice(0, 10)} 가져옴) · ${sy.last_date} 기준 은행 ${won(sy.balance)} / 장부 ${won(mine)}</small></div>`; })()}
   <section class="balflow"><div><span>${Number(m.slice(5))}월 초 잔액</span><b>${tracked ? won(start) : '-'}</b></div><i>+</i><div><span>입금 ${rs.filter(b => b.deposit).length}건</span><b class="pos">${won(inn)}</b></div><i>−</i><div><span>출금 ${rs.filter(b => b.withdrawal).length}건</span><b>${won(out)}</b></div><i>=</i><div class="end"><span>${m === C.todayStr().slice(0, 7) ? '현재 잔액' : '월말 잔액'}</span><b class="${end < 0 ? 'neg' : ''}">${tracked ? won(end) : '-'}</b></div></section>
   <section class="card flush"><div class="listhead"><span>${acc ? esc(acc) : '장부 관리 통장 합산'} · ${rs.length}건</span><b><span class="pos">수입 +${won(g.수입)}</span> · 지출 ${won(g.지출)} · 이동 ${won(g.이동)}${g.미분류 ? ` · <span class="neg">! 미분류 ${won(g.미분류)}</span>` : ''}</b></div>
-  ${rs.length ? `<div class="tablewrap"><table class="tbl bank"><thead><tr><th>날짜</th><th>내용</th><th>분류</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>${rs.map(b => { const grp = C.bankGroup(b.category === '확인 필요' ? '' : b.category); return `<tr class="brow${fl('bankun', !grp)}" data-act="bankEdit" data-id="${b.id}"><td class="d">${b.tx_date.slice(5).replace('-', '/')}</td><td><b>${esc(b.memo)}</b>${!acc || b.note ? `<br><small class="muted">${!acc ? esc(b.account) : ''}${!acc && b.note ? ' · ' : ''}${esc(b.note || '')}</small>` : ''}</td>
+  ${rs.length ? `<div class="tablewrap"><table class="tbl bank" data-mhead="2"><thead><tr><th>날짜</th><th>내용</th><th>분류</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>${rs.map(b => { const grp = C.bankGroup(b.category === '확인 필요' ? '' : b.category); return `<tr class="brow${fl('bankun', !grp)}" data-act="bankEdit" data-id="${b.id}"><td class="d">${b.tx_date.slice(5).replace('-', '/')}</td><td><b>${esc(b.memo)}</b>${!acc || b.note ? `<br><small class="muted">${!acc ? esc(b.account) : ''}${!acc && b.note ? ' · ' : ''}${esc(b.note || '')}</small>` : ''}</td>
       <td>${b.fixed ? tag('고정', 'fix') : ''}${grp ? tag(`${grp} · ${b.category}`, grp === '수입' ? 'ok' : grp === '이동' ? 'wait' : 'cat') : tag('! 미분류', 'warn')}</td><td class="r pos">${b.deposit ? '+' + won(b.deposit) : ''}</td><td class="r">${b.withdrawal ? '−' + won(b.withdrawal) : ''}</td><td class="r">${b.bal === null ? '<span class="muted">-</span>' : `<b class="${b.bal < 0 ? 'neg' : ''}">${won(b.bal)}</b>`}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="empty">이 달의 통장 거래가 없습니다.</div>'}</section>
   <p class="muted small">잔액은 기초잔액 기준일(${esc(from)}) 이후 거래부터 계산합니다. 그 이전 달은 잔액 없이 내역만 보입니다. <b>수입</b>(급여·부수입)만 수입에, <b>지출</b>은 예산 실행에 잡히고, <b>이동</b>(이체·정산입금·카드대금·저축·대출상환)은 수입·지출에 잡히지 않습니다.</p>`;
 }

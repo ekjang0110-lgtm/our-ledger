@@ -117,3 +117,58 @@ tr.sub>td{background:#f7faf8;padding:8px 12px 12px 44px;box-shadow:inset 3px 0 0
 .tl tr.nextpay td{background:#f3f8f6}.tl tr.nextpay td:nth-child(2){font-style:italic}
 .chk{padding:9px 12px;border-radius:10px;background:#e3eefb;border:1px solid #bcd5f1;color:var(--pos);font-weight:700;font-size:13px;margin-bottom:10px}.chk small{font-weight:500;color:var(--mut);margin-left:6px}.chk.bad{background:#fde6dc;border-color:#f0b9a2;color:var(--neg)}
 .lock{text-align:center;justify-items:center}.lockicon{font-size:40px;line-height:1}.mt{margin-top:10px}
+/* v2.4 모바일(100% 배율 유지·시인성) */
+@media(max-width:860px){
+html,body{overflow-x:hidden;max-width:100%}
+body{font-size:15px;line-height:1.55}
+input,select,textarea,.stmemo,.stfix,.billin{font-size:16px!important}
+main{padding:0 14px 24px}.content{gap:12px}
+.top{padding:10px 0 8px}.top h1{font-size:19px}.monthnav label{font-size:14.5px}.monthnav button{padding:4px 11px}
+.card{padding:14px 14px;border-radius:14px}.sechead{flex-wrap:wrap;gap:4px 8px;margin-bottom:10px}.sechead h2{font-size:16px}.sechead>span{flex-basis:100%}
+/* 홈 상단 */
+.hero{padding:18px 16px 16px;gap:10px;border-radius:16px}.hero-main span{font-size:13px}.hero-main>b{font-size:31px}.hero-main em{font-size:12.5px;line-height:1.45}
+.flow{display:grid;grid-template-columns:1fr 1fr;gap:8px}.flow>i{display:none}.flow>div{padding:9px 11px}.flow b{font-size:16px;white-space:normal}.flow small{display:block;white-space:normal;font-size:11px;line-height:1.35}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:12px}.legend span{white-space:normal}
+.kpis,.kpis.three,.kpis.four{grid-template-columns:1fr 1fr;gap:10px}.kpi{padding:12px 13px}.kpi>span{font-size:12px}.kpi>b{font-size:19px;white-space:normal;word-break:keep-all}.kpi>small{white-space:normal;font-size:11.5px;line-height:1.4}
+.todos{grid-template-columns:1fr;gap:8px}.todoitem{padding:11px 12px}.todoitem strong{font-size:14px}
+.vrow .vhead>b{font-size:15px}.vhead span b{font-size:15px}
+/* 넓은 표 → 카드형 줄 */
+.tbl.rt,.tbl.rt tbody{display:block;width:100%}.tbl.rt thead{display:none}
+.tbl.rt tr{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 14px;padding:11px 2px;border-bottom:1px solid var(--line)}
+.tbl.rt tr:last-child{border-bottom:0}.tbl.rt tbody tr:hover td{background:none}
+.tbl.rt td{display:block;border:0;padding:0;background:none!important;box-shadow:none!important}
+.tbl.rt td.h{flex:1 1 100%;font-size:15px;min-width:0}
+.tbl.rt[data-mhead="2"] td.h:first-child{flex:0 0 auto;min-width:36px;color:var(--mut);font-size:13px;text-align:left!important}
+.tbl.rt[data-mhead="2"] td.h+td.h{flex:1 1 0;min-width:0}
+.tbl.rt td[data-l]{font-size:14px;text-align:left!important;white-space:nowrap}
+.tbl.rt td[data-l]::before{content:attr(data-l);color:var(--mut);font-size:11.5px;margin-right:5px;font-weight:500}
+.tbl.rt td[data-l=""]::before{display:none}
+.tbl.rt td[data-l]:last-child{margin-left:auto;font-weight:700}
+.tbl.rt td.e{display:none}
+.tbl.rt tr.sum{background:var(--soft);border-radius:10px;padding:11px 10px;margin-top:4px;border-bottom:0}
+.tbl.rt tr.full td,.tbl.rt tr.sub td,.tbl.rt tr.today td{flex:1 1 100%}
+.tbl.rt tr.today{padding:0;border:0}.tl tr.today td{border-radius:8px;padding:6px 10px}
+.tbl.rt tr.past{opacity:.92}.tbl.rt .src{margin-right:4px}
+.tbl.rt td .billin{max-width:150px}
+tr.sub>td{padding:8px 10px!important}
+.tablewrap{margin:0 -4px;padding:0 4px}
+.bank .row td,.tbl.bank tr{cursor:pointer}
+.legend.sm span{white-space:normal}
+/* 카드 목록 */
+.item{padding:12px 14px;overflow:hidden}.i1{min-width:0;gap:7px}.i1 .d.dt{width:auto;min-width:40px;font-size:12px;line-height:1.25}.i1 .d small{display:block}.i1 .m{font-size:15px}.i1 .a{font-size:15.5px}
+.i2{padding-left:0;flex-wrap:wrap;font-size:12.5px}.i2>span:first-child{white-space:normal}
+.stage,.stage.sug{margin:6px 0 2px;padding:8px}.pk{padding:7px 12px;font-size:13.5px}
+.filters .chip{padding:7px 12px;font-size:13.5px}
+.balflow b{font-size:17px}.listhead{padding:10px 14px;flex-wrap:wrap;gap:4px}
+.loans{gap:10px}.menu{gap:10px}.menu a{padding:14px}
+.sheet h2{font-size:18px}.form{grid-template-columns:1fr 1fr;gap:10px}
+}
+@media(max-width:380px){.flow{grid-template-columns:1fr}.legend{grid-template-columns:1fr}.hero-main>b{font-size:27px}}
+@media(max-width:860px){.tbl:not(.rt):not(.board):not(.sched) td{white-space:normal;word-break:keep-all}.tbl:not(.rt):not(.board):not(.sched){table-layout:auto}.tbl td small{white-space:normal}}
+@media(max-width:860px){
+.tbl.rt[data-mhead="2"] td.h+td.h{flex:1 1 calc(100% - 52px);font-size:15px}
+.tbl.rt[data-mhead="2"] td[data-l]{font-size:13.5px}
+.tbl.rt[data-mhead="2"] tr{row-gap:6px}
+.tbl.rt[data-mhead="2"] td.h:first-child+td.h~td[data-l]:not(.e){}
+.tbl.bank.rt td[data-l="분류"]{flex:1 1 100%}.tbl.bank.rt td[data-l="분류"]::before{display:none}
+}
