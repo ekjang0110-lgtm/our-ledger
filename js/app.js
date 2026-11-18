@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=12';
-import { supabaseStore, demoStore } from './store.js?v=12';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=12';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=12';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=12';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=12';
+import * as C from './calc.js?v=13';
+import { supabaseStore, demoStore } from './store.js?v=13';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=13';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=13';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=13';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=13';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -261,8 +261,10 @@ function bulkBar(rs) {
 // 선택한 건 중 각 줄에서 카테고리를 골라 둔 것(일괄 분류를 고르지 않았을 때 반영 대상)
 function bulkOwn() { return [...S.sel].map(id => S.ctx.rows.find(r => r.id === id)).filter(r => r && r.unclassified && S.stage[r.id] && (S.stage[r.id].category || S.stage[r.id].fixed)); }
 function applyBar() {
-  const list = stageList(); const auto = list.filter(x => x.st.auto).length;
-  return `<div class="applybar ${list.length ? 'on' : ''}" id="applybar">${list.length ? `<span><b>${list.length}건</b> 선택됨${auto ? ` <small>(자동 제안 ${auto}건 포함)</small>` : ''}</span><button class="btn ghost" data-act="stageClear">선택 지우기</button><button class="btn" data-act="stageApply">✔ 한 번에 반영</button>` : '<span class="muted">미분류 건의 카테고리를 눌러 선택해 두고, 다 고른 뒤 한 번에 반영하세요.</span>'}</div>`;
+  const list = stageList(); const auto = list.filter(x => x.st.auto).length, mine = list.length - auto; const onUn = S.cardFilter.kind === 'un';
+  if (!list.length) return `<div class="applybar" id="applybar"><span class="muted">미분류 건의 카테고리를 눌러 골라 두고, 다 고른 뒤 한 번에 반영하세요.</span></div>`;
+  return `<div class="applybar on" id="applybar"><span><b>분류 대기 ${list.length}건</b> <small class="muted">${mine ? `직접 고른 ${mine}건` : ''}${mine && auto ? ' · ' : ''}${auto ? `자동 제안 ${auto}건` : ''} · 아직 저장 안 됨</small></span>
+    ${onUn ? '' : `<button class="btn ghost" data-act="cardFilter" data-k="kind" data-v="un">미분류에서 확인</button>`}<button class="btn ghost" data-act="stageClear">제안 지우기</button><button class="btn" data-act="stageApply">✔ ${list.length}건 반영</button></div>`;
 }
 function viewCards() {
   const ms = master(); const all = S.ctx.rows.filter(r => r.useMonth === S.month); const rs = cardRows(); const f = S.cardFilter; const cats = ms.card_categories || []; const fixedNames = (ms.fixed_card || []).map(x => x.name);
