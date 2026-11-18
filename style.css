@@ -116,3 +116,4 @@ tr.sub>td{background:#f7faf8;padding:8px 12px 12px 44px;box-shadow:inset 3px 0 0
 .src{display:inline-block;font-size:10.5px;font-weight:800;border-radius:5px;padding:1px 5px;margin-right:6px;background:#e3eefb;color:var(--pos);border:1px solid #bcd5f1;vertical-align:1px}.src.est{background:#fff;color:var(--mut);border:1px dashed #a9b8b1}
 .tl tr.nextpay td{background:#f3f8f6}.tl tr.nextpay td:nth-child(2){font-style:italic}
 .chk{padding:9px 12px;border-radius:10px;background:#e3eefb;border:1px solid #bcd5f1;color:var(--pos);font-weight:700;font-size:13px;margin-bottom:10px}.chk small{font-weight:500;color:var(--mut);margin-left:6px}.chk.bad{background:#fde6dc;border-color:#f0b9a2;color:var(--neg)}
+.lock{text-align:center;justify-items:center}.lockicon{font-size:40px;line-height:1}.mt{margin-top:10px}

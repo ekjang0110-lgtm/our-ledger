@@ -1,8 +1,9 @@
-import * as C from './calc.js?v=5';
-import { supabaseStore, demoStore } from './store.js?v=5';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=5';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=5';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=5';
+import * as C from './calc.js?v=6';
+import { supabaseStore, demoStore } from './store.js?v=6';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=6';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=6';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=6';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=6';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -31,11 +32,32 @@ async function enter() {
   app.innerHTML = '<div class="boot">불러오는 중…</div>';
   try {
     S.session = await S.store.session(); if (!S.session) return render();
+    if (S.store.mode !== 'demo' && bioEnabled() && !S.unlocked) { await lockScreen(); return; }
     S.member = await S.store.membership(); if (!S.member) return render();
     S.data = await S.store.loadAll(); await migrate(); rebuild();
     const months = C.monthsWithData(S.ctx); if (!months.length && !S.data.docs.master) { location.hash = '#/more/data'; }
-    render();
+    render(); setTimeout(offerBio, 800);
   } catch (e) { console.error(e); app.innerHTML = `<div class="boot">연결하지 못했습니다.<br><small>${esc(e.message)}</small><br><button class="btn" onclick="location.reload()">다시 시도</button></div>`; }
+}
+
+// ---------- 지문·얼굴 잠금
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenAt = Date.now(); else if (S.unlocked && bioEnabled() && hiddenAt && Date.now() - hiddenAt > 5 * 60 * 1000) { S.unlocked = false; enter(); } });
+async function lockScreen(auto = true) {
+  app.innerHTML = `<div class="auth"><div class="card lock"><div class="lockicon" aria-hidden="true">🔒</div><h1>우리의 장부</h1><p class="muted">지문 또는 얼굴로 열어 주세요</p>
+    <button class="btn wide" id="bioBtn">잠금 해제</button><p class="muted small" id="biomsg"></p><button class="link" id="pwBtn">비밀번호로 다시 로그인</button></div></div>`;
+  const go = async () => { try { if (await bioUnlock()) { S.unlocked = true; await enter(); } } catch (e) { const m = document.querySelector('#biomsg'); if (m) m.textContent = '확인하지 못했습니다. 다시 눌러 주세요.'; } };
+  document.querySelector('#bioBtn').onclick = go;
+  document.querySelector('#pwBtn').onclick = () => run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.unlocked = false; render(); });
+  if (auto) setTimeout(go, 150);
+}
+async function offerBio() {
+  if (S.store.mode === 'demo' || bioEnabled() || bioAsked() || !(await bioAvailable())) return;
+  openModal(`<h2>다음부터 지문으로 열까요?</h2><p class="muted small">이 기기의 지문·얼굴 인식으로 앱을 엽니다. 로그인은 유지되고, 생체 정보는 기기 밖으로 나가지 않습니다. 더보기 > 계정에서 언제든 끌 수 있습니다.</p>
+    <div class="actions"><button class="btn ghost" id="bioNo">나중에</button><button class="btn" id="bioYes">지문으로 열기 켜기</button></div>`, sheet => {
+    sheet.querySelector('#bioNo').onclick = () => { markAsked(); closeModal(); };
+    sheet.querySelector('#bioYes').onclick = async () => { try { await bioEnable(S.session.user.email); S.unlocked = true; closeModal(); toast('다음부터 지문·얼굴로 열립니다.'); } catch { toast('설정하지 못했습니다. 더보기 > 계정에서 다시 시도해 주세요.', true); } };
+  });
 }
 
 // ---------- 화면
@@ -55,6 +77,7 @@ function render() {
     <div class="content">${body}</div></main>
   <nav class="tabbar">${NAV.map(n => `<a href="#/${n[0]}" class="${S.route === n[0] ? 'on' : ''}"><i>${n[2]}</i>${n[1]}</a>`).join('')}</nav></div>`;
   const mp = document.querySelector('#monthpick'); if (mp) mp.onchange = () => { if (mp.value) { S.month = mp.value; render(); } };
+  const bb = document.querySelector('#biobox'); if (bb) bioAvailable().then(ok => { bb.innerHTML = !ok ? '<span class="muted small">이 기기·브라우저는 지문·얼굴 잠금을 지원하지 않습니다.</span>' : bioEnabled() ? '<span class="tag ok">✔ 지문·얼굴 잠금 켜짐</span><button class="btn ghost sm" data-act="bioOff">끄기</button>' : '<span class="muted small">앱을 열 때 지문·얼굴로 확인합니다.</span><button class="btn sm" data-act="bioOn">지문·얼굴 잠금 켜기</button>'; });
   if (S.flash) { S.flash = ''; setTimeout(() => document.querySelector('.flash')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60); }
 }
 
@@ -67,7 +90,7 @@ function viewAuth() {
   document.querySelector('#authform').onsubmit = e => { e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); run(async () => {
     if (up) { const ok = await S.store.signUp(f.email, f.password); if (!ok) { document.querySelector('#authmsg').textContent = '가입 확인 메일을 보냈습니다. 메일의 링크를 누른 뒤 이 화면에서 로그인해 주세요. (링크를 눌렀을 때 빈 화면이 떠도 정상입니다)'; S.authMode = 'in'; return; } }
     else await S.store.signIn(f.email, f.password);
-    await enter();
+    S.unlocked = true; await enter(); setTimeout(offerBio, 400);
   }); };
 }
 function viewJoin() {
@@ -481,7 +504,9 @@ function viewAccount() {
   const h = S.member.household;
   return `${sec('함께 쓰는 사람', `<div class="chips">${S.member.members.map(m => `<span class="chip ${personClass(m.display_name)}">${esc(m.display_name)}</span>`).join('')}</div>
   ${S.member.members.length < h.max_members ? `<p>초대 코드: <b class="code">${esc(h.invite_code)}</b></p><p class="muted small">상대방이 이 주소에서 가입한 뒤 "가계부 연결" 화면에 이 코드를 넣으면 같은 가계부를 봅니다. 두 사람이 모두 들어오면 코드는 더 쓸 수 없습니다.</p>` : '<p class="muted small">두 사람이 모두 연결됐습니다.</p>'}`)}
-  ${sec('이 기기', `<p class="muted small">${esc(S.session.user.email || '')} (${S.store.mode === 'demo' ? '데모' : '로그인됨'})</p><button class="btn ghost" data-act="logout">로그아웃</button>`)}`;
+  ${sec('이 기기', `<p class="muted small">${esc(S.session.user.email || '')} (${S.store.mode === 'demo' ? '데모' : '로그인됨'}) · 로그아웃하지 않으면 다시 로그인하지 않아도 됩니다.</p>
+    <div class="row gap wrap" id="biobox"><span class="muted small">지문·얼굴 잠금 확인 중…</span></div>
+    <div class="row gap mt"><button class="btn ghost" data-act="logout">로그아웃</button></div>`)}`;
 }
 
 async function migrate() {
@@ -495,7 +520,9 @@ const ACT = {
   month(el) { S.month = C.addMonth(S.month, Number(el.dataset.d)); render(); },
   gotoMonth(el) { S.month = el.dataset.m; if (location.hash === el.getAttribute('href')) { render(); window.scrollTo(0, 0); } },
   authMode() { S.authMode = S.authMode === 'up' ? 'in' : 'up'; render(); },
-  logout() { run(async () => { await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
+  async bioOn() { try { await bioEnable(S.session.user.email); S.unlocked = true; toast('다음부터 지문·얼굴로 열립니다.'); render(); } catch { toast('설정하지 못했습니다. 이 기기에서 지문·얼굴 인식이 켜져 있는지 확인해 주세요.', true); } },
+  bioOff() { bioDisable(); toast('지문·얼굴 잠금을 껐습니다.'); render(); },
+  logout() { run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
   modalClose() { closeModal(); },
   todo(el) { S.flash = el.dataset.flash || ''; if (el.dataset.kind !== undefined) S.cardFilter = { card: '', kind: el.dataset.kind }; },
   billOpen(el) { S.billOpen = S.billOpen === el.dataset.card ? '' : el.dataset.card; const y = window.scrollY; render(); window.scrollTo(0, y); },
