@@ -1,12 +1,12 @@
-import * as C from './calc.js?v=10';
-import { supabaseStore, demoStore } from './store.js?v=10';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=10';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=10';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=10';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=10';
+import * as C from './calc.js?v=11';
+import { supabaseStore, demoStore } from './store.js?v=11';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=11';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=11';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=11';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=11';
 
 const app = document.querySelector('#app');
-const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
+const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
 const LISTS = {};
 const NAV = [['home', '홈', '⌂'], ['cards', '카드', '▤'], ['bank', '통장', '⇄'], ['bills', '카드대금', '₩'], ['fixed', '고정지출', '▣'], ['more', '더보기', '⋯']];
 const MORE = [['budget', '예산', '변동지출 기본 예산과 월별 조정'], ['inst', '할부', '할부 청구 일정'], ['loans', '대출', '잔액과 상환 계획'], ['onnuri', '온누리', '개인 사용 누계·공용 충전 잔액'], ['goals', '목표', '5천만 목표·시나리오·가족행사'], ['tax', '연말정산', '카드공제 예상'], ['trend', '월별 추이', '월별 실적 한눈에'], ['closes', '월 마감 기록', '마감한 달의 숫자 보관'], ['master', '기초 데이터', '통장·카드·수입·고정지출·자동분류'], ['data', '데이터 관리', '가져오기·내보내기·엑셀 대조'], ['audit', '변경 이력', '누가 무엇을 바꿨는지'], ['account', '계정', '초대 코드·로그아웃']];
@@ -250,6 +250,13 @@ function stageOf(r) {
 }
 const stagePending = (r, st) => !!(st.category || st.fixed || (st.memo !== undefined && st.memo !== (r.memo || '')));
 function stageList() { return S.ctx.rows.filter(r => r.useMonth === S.month && r.unclassified).map(r => ({ r, st: stageOf(r) })).filter(x => stagePending(x.r, x.st)); }
+// 여러 건 선택(체크박스 · PC 우클릭) → 카테고리 한 번에 바꾸기
+function bulkBar(rs) {
+  const cats = master().card_categories || []; const allOn = rs.length && rs.every(r => S.sel.has(r.id));
+  return `<div class="applybar bulk on" id="bulkbar"><span><b>${S.sel.size}건</b> 선택</span>
+    <div class="pick">${cats.map(c => `<button class="pk ${S.bulkCat === c ? 'on' : ''}" data-act="bulkPick" data-cat="${esc(c)}">${S.bulkCat === c ? '✔ ' : ''}${esc(c)}</button>`).join('')}<button class="pk fx ${S.bulkCat === '__fixed' ? 'on' : ''}" data-act="bulkPick" data-cat="__fixed">${S.bulkCat === '__fixed' ? '✔ ' : ''}고정</button><button class="pk ${S.bulkCat === '__none' ? 'on' : ''}" data-act="bulkPick" data-cat="__none">${S.bulkCat === '__none' ? '✔ ' : ''}미분류로</button></div>
+    <div class="row gap"><button class="btn ghost sm" data-act="selAll">${allOn ? '전체 해제' : '보이는 것 전체 선택'}</button><button class="btn ghost sm" data-act="selClear">선택 해제</button><button class="btn" data-act="bulkApply" ${S.bulkCat ? '' : 'disabled'}>✔ ${S.sel.size}건 반영</button></div></div>`;
+}
 function applyBar() {
   const list = stageList(); const auto = list.filter(x => x.st.auto).length;
   return `<div class="applybar ${list.length ? 'on' : ''}" id="applybar">${list.length ? `<span><b>${list.length}건</b> 선택됨${auto ? ` <small>(자동 제안 ${auto}건 포함)</small>` : ''}</span><button class="btn ghost" data-act="stageClear">선택 지우기</button><button class="btn" data-act="stageApply">✔ 한 번에 반영</button>` : '<span class="muted">미분류 건의 카테고리를 눌러 선택해 두고, 다 고른 뒤 한 번에 반영하세요.</span>'}</div>`;
@@ -267,12 +274,12 @@ function viewCards() {
   <div class="filters"><div class="chips scroll">${chip('kind', '', '전체', nK(''))}${chip('kind', 'un', '미분류', nK('un'))}${chip('kind', 'fixed', '고정', nK('fixed'))}${cats.map(c => chip('kind', c, c, nK(c))).join('')}${chip('kind', 'inst', '할부', nK('inst'))}${chip('kind', 'settle', '정산', nK('settle'))}${chip('kind', 'onnuri', '온누리', nK('onnuri'))}</div>
   <div class="chips scroll">${chip('card', '', '전체 카드', inKind.length)}${(ms.cards || []).map(c => chip('card', c.name, c.name, inKind.filter(r => r.card === c.name).length)).join('')}</div></div>
   <section class="card flush"><div class="listhead"><span>${rs.length}건</span><b>반영액 ${won(rs.reduce((a, r) => a + r.applied, 0))}원</b></div>
-  ${rs.length ? rs.map(r => `<div class="item ${r.canceled ? 'cancel' : ''}${fl('un', r.unclassified)}${fl('settle', r.settle > 0 && !r.settle_done)}${fl('inst', r.K > 1 && r.amount > 0)}" data-act="cardEdit" data-id="${r.id}">
-    <div class="i1"><span class="d dt">${r.used_date.slice(5).replace('-', '/')}${r.used_time ? ` <small>${esc(String(r.used_time).slice(0, 5))}</small>` : ''}</span>${who(r.person)}<span class="m">${esc(r.label || r.merchant)}</span><b class="a">${won(r.applied)}</b></div>
+  ${rs.length ? rs.map(r => `<div class="item ${r.canceled ? 'cancel' : ''}${fl('un', r.unclassified)}${fl('settle', r.settle > 0 && !r.settle_done)}${fl('inst', r.K > 1 && r.amount > 0)}" data-act="cardEdit" data-id="${r.id}" data-sel="${S.sel.has(r.id) ? 1 : 0}">
+    <div class="i1"><button class="ck ${S.sel.has(r.id) ? 'on' : ''}" data-act="selToggle" data-id="${r.id}" role="checkbox" aria-checked="${S.sel.has(r.id)}" aria-label="선택">${S.sel.has(r.id) ? '✔' : ''}</button><span class="d dt">${r.used_date.slice(5).replace('-', '/')}${r.used_time ? ` <small>${esc(String(r.used_time).slice(0, 5))}</small>` : ''}</span>${who(r.person)}<span class="m">${esc(r.label || r.merchant)}</span><b class="a">${won(r.applied)}</b></div>
     <div class="i2"><span>${esc(r.card)}${r.label ? ' · ' + esc(r.merchant) : ''}${r.K > 1 ? ` · ${r.K}개월 할부${r.auto ? ` (총 ${won(r.amount)})` : ''}` : ''}${r.canceled ? ' · 취소' : ''}${r.adjustment ? ` · 조정 ${signed(r.adjustment)}` : ''}${r.prepaid ? ` · 선결제 ${won(r.prepaid)}` : ''}${r.settle ? ` · 정산 −${won(r.settle)}(${r.settle_done ? '받음' : '미수'})` : ''}${r.onnuri ? ` · 온누리 ${won(r.onnuri)}` : ''}${r.memo && !r.unclassified ? ' · ' + esc(r.memo) : ''}</span>
       <span>${r.fixed ? tag('고정', 'fix') : ''}${r.category ? tag(r.category, 'cat') : (r.unclassified ? tag('미분류', 'warn') : '')}</span></div>
     ${r.unclassified ? stage(r) : ''}</div>`).join('') : '<div class="empty">이 조건의 카드 내역이 없습니다.</div>'}</section>
-  ${unAll ? applyBar() : ''}`;
+  ${S.sel.size ? bulkBar(rs) : unAll ? applyBar() : ''}`;
 }
 function cardModal(r) {
   const ms = master(); const isNew = !r; r = r || { card: (ms.cards[0] || {}).name, used_date: C.todayStr().slice(0, 7) === S.month ? C.todayStr() : `${S.month}-01`, merchant: '', amount: 0, category: '', fixed: false, label: '', adjustment: 0, prepaid: 0, memo: '', source: 'manual', inst_months: 0, settle: 0, settle_done: false, onnuri: 0, onnuri_shared: false };
@@ -567,7 +574,7 @@ async function migrate() {
 }
 // ---------- 동작
 const ACT = {
-  month(el) { S.month = C.addMonth(S.month, Number(el.dataset.d)); render(); },
+  month(el) { S.month = C.addMonth(S.month, Number(el.dataset.d)); S.sel.clear(); render(); },
   gotoMonth(el) { S.month = el.dataset.m; if (location.hash === el.getAttribute('href')) { render(); window.scrollTo(0, 0); } },
   authMode() { S.authMode = S.authMode === 'up' ? 'in' : 'up'; render(); },
   async bioOn() { try { await bioEnable(S.session.user.email); S.unlocked = true; markSeen(); toast('다음부터 지문·얼굴로 열립니다.'); render(); } catch { toast('설정하지 못했습니다. 이 기기에서 지문·얼굴 인식이 켜져 있는지 확인해 주세요.', true); } },
@@ -580,7 +587,14 @@ const ACT = {
   bankSort() { S.bankSort = S.bankSort === 'asc' ? 'desc' : 'asc'; render(); },
   bankPaste() { bankPasteModal(); },
   jump(el) { document.getElementById(el.dataset.to)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
-  cardFilter(el) { S.cardFilter[el.dataset.k] = el.dataset.v; render(); },
+  cardFilter(el) { S.cardFilter[el.dataset.k] = el.dataset.v; S.sel.clear(); render(); },
+  selToggle(el) { const id = Number(el.dataset.id); S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
+  selAll() { const rs = cardRows(); const all = rs.every(r => S.sel.has(r.id)); rs.forEach(r => all ? S.sel.delete(r.id) : S.sel.add(r.id)); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
+  selClear() { S.sel.clear(); S.bulkCat = ''; keepScroll(); },
+  bulkPick(el) { S.bulkCat = S.bulkCat === el.dataset.cat ? '' : el.dataset.cat; keepScroll(); },
+  bulkApply() { const ids = [...S.sel], c = S.bulkCat; if (!ids.length || !c) return;
+    const patch = c === '__fixed' ? { fixed: true } : c === '__none' ? { category: '', fixed: false } : { category: c, fixed: false };
+    run(async () => { for (const id of ids) { Object.assign(S.data.card_tx.find(x => x.id === id), await S.store.updateCard(id, patch)); delete S.stage[id]; } S.sel.clear(); S.bulkCat = ''; rebuild(); keepScroll(); }, `${ids.length}건을 바꿨습니다.`); },
   cardEdit(el) { cardModal(S.ctx.rows.find(r => r.id === Number(el.dataset.id))); },
   cardNew() { cardModal(null); },
   noop() { },
@@ -620,6 +634,9 @@ const ACT = {
   taxSave() { const tax = structuredClone(doc('tax')); document.querySelectorAll('#taxtbl input[data-p]').forEach(i => { const p = tax.people[i.dataset.p]; if (i.dataset.k === 'salary') p.salary = toNum(i.value); else p.manual[i.dataset.k] = toNum(i.value); }); saveDoc('tax', tax); },
   export() { const blob = new Blob([JSON.stringify({ version: 1, exported: new Date().toISOString(), docs: S.data.docs, card_tx: S.data.card_tx, bank_tx: S.data.bank_tx, card_bills: S.data.card_bills, closes: S.data.closes })], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `우리의장부_백업_${C.todayStr()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); },
 };
+function keepScroll() { const y = window.scrollY; render(); window.scrollTo(0, y); }
+// PC: 카드 내역에서 마우스 오른쪽 버튼을 누르면 그 줄이 선택/해제된다
+document.addEventListener('contextmenu', e => { const it = e.target.closest('.item[data-sel]'); if (!it || e.target.closest('input,select,textarea')) return; e.preventDefault(); ACT.selToggle(it); });
 document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (!el || !ACT[el.dataset.act]) return; if (el.tagName === 'BUTTON') e.preventDefault(); ACT[el.dataset.act](el, e); });
 document.addEventListener('input', e => { const t = e.target; if (t.classList && t.classList.contains('stmemo')) { const r = S.ctx.rows.find(x => x.id === Number(t.dataset.id)); if (!r) return; stageOf(r).memo = t.value; const bar = document.querySelector('#applybar'); if (bar) bar.outerHTML = applyBar(); } });
 document.addEventListener('change', e => {
