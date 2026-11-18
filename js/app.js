@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=7';
-import { supabaseStore, demoStore } from './store.js?v=7';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=7';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=7';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=7';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=7';
+import * as C from './calc.js?v=8';
+import { supabaseStore, demoStore } from './store.js?v=8';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=8';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=8';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=8';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=8';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -40,6 +40,40 @@ async function enter() {
   } catch (e) { console.error(e); app.innerHTML = `<div class="boot">연결하지 못했습니다.<br><small>${esc(e.message)}</small><br><button class="btn" onclick="location.reload()">다시 시도</button></div>`; }
 }
 
+// ---------- 홈 금액 상세(수입·쓴 돈·남은 예산)
+function breakdownModal(kind) {
+  const m = S.month, s = C.monthSummary(S.ctx, m), R = s.result, mo = Number(m.slice(5));
+  const line = (name, amt, sub = '', cls = '') => `<div class="bd ${cls}"><span>${name}${sub ? `<small>${sub}</small>` : ''}</span><b>${won(amt)}</b></div>`;
+  const group = (title, total, body, open = false) => `<details class="bdg" ${open ? 'open' : ''}><summary><span>${title}</span><b>${won(total)}</b></summary><div class="bdb">${body || '<p class="muted small">없음</p>'}</div></details>`;
+  let html = '';
+  if (kind === 'spent') {
+    const rows = S.ctx.rows.filter(r => r.useMonth === m && r.applied);
+    const cat = r => r.fixed ? '고정(카드)' : r.resale ? '리셀' : r.category || '미분류';
+    const by = {}; rows.forEach(r => { const k = cat(r); (by[k] = by[k] || []).push(r); });
+    const order = ['고정(카드)', '식비', '낚시', '용돈', '용돈가불', '기타', '미분류']; const keys = Object.keys(by).sort((a, b) => (order.indexOf(a) + 99) % 99 - (order.indexOf(b) + 99) % 99 || a.localeCompare(b));
+    const cardBody = keys.map(k => { const list = by[k].sort((a, b) => b.applied - a.applied); const t = list.reduce((a, r) => a + r.applied, 0);
+      return `<details class="bdg sub ${k === '미분류' ? 'warnbox' : ''}"><summary><span>${k === '미분류' ? '! ' : ''}${esc(k)} <small>${list.length}건</small></span><b>${won(t)}</b></summary><div class="bdb">${list.map(r => line(`${who(r.person)}${esc(r.label || r.merchant)}`, r.applied, `${r.used_date.slice(5).replace('-', '/')} · ${esc(r.card)}${r.K > 1 ? ` · ${r.K}개월 할부 첫 달` : ''}`)).join('')}
+        ${k === '미분류' ? `<a class="btn ghost sm" href="#/cards" data-act="todo" data-kind="un" data-flash="un">카드 화면에서 분류하기</a>` : ''}</div></details>`; }).join('');
+    const inst = C.billInstItems(S.ctx, C.addMonth(m, 1)).filter(i => !(i.auto && i.nth === 1));
+    const bank = S.ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && C.bankGroup(b.category) === '지출' && b.category !== '고정');
+    html = `<h2>${mo}월 쓴 돈 ${won(R.spent.total)}원</h2><p class="muted small">카드는 쓴 달 기준입니다. 미분류도 쓴 돈에 들어갑니다.</p>
+      ${group('고정 이체 (현금)', R.spent.fixedCash, s.fixedCash.map(f => line(`${who(f.person)}${esc(f.name)}`, f.transfer, `${f.day}일 · ${esc(f.account)}${f.done ? ' · ✔ 완료' : ''}`)).join(''))}
+      ${group(`카드 사용 (${rows.length}건)`, R.spent.card, cardBody, true)}
+      ${group('할부 월 납입 (이전 구매분)', R.spent.inst, inst.map(i => line(`${who(i.person)}${esc(i.name)}`, i.amount, `${esc(i.card)} · ${i.nth}/${i.K}회 · 총 ${won(i.total)}`)).join(''))}
+      ${group('통장 지출', R.spent.bank, bank.map(b => line(esc(b.memo), C.num(b.withdrawal) - C.num(b.deposit), `${b.tx_date.slice(5).replace('-', '/')} · ${esc(b.category)}`)).join(''))}`;
+  } else if (kind === 'remain') {
+    html = `<h2>${mo}월 남은 예산 ${won(R.remain.total)}원</h2><p class="muted small">이번 달에 예산만큼 더 쓴다고 보고 남는 돈에서 미리 뺀 금액입니다. 예산을 넘긴 항목은 0으로 봅니다.</p>
+      ${group('변동지출', R.remain.variable, s.variable.map(v => line(esc(v.cat), Math.max(0, v.budget - v.actual), `예산 ${won(v.budget)} · 사용 ${won(v.actual)}${v.actual > v.budget ? ' · ▲ 초과' : ''}`)).join(''), true)}
+      ${group('식대 (용돈 예산 중)', R.remain.meal, s.persons.filter(p => s.allowance[p].meal).map(p => { const a = s.allowance[p]; return line(`${who(p)}${p} 식대`, Math.max(0, a.meal - a.used), `식대 예산 ${won(a.meal)} · 용돈 사용 ${won(a.used)}`); }).join(''), true)}
+      ${group('아직 결제 안 된 고정(카드)', R.remain.fixedCard, s.fixedCard.filter(f => f.status === '대기').map(f => line(`${who(f.person)}${esc(f.name)}`, f.budget, esc(f.card || ''))).join(''), true)}`;
+  } else {
+    const side = S.ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && b.category === '부수입');
+    html = `<h2>${mo}월 수입 ${won(s.income)}원</h2><p class="muted small">급여는 기초 데이터의 계획 금액, 부수입은 통장에 "부수입"으로 기록된 금액입니다. 영민 월급은 전월 말에 들어와도 이번 달 수입으로 봅니다.</p>
+      ${group('급여', s.incomePlan, (master().incomes || []).map(i => line(`${who(i.person)}${esc(i.name)}`, i.amount, i.early ? '전월 말 입금 → 이번 달 1일 수입' : `${i.day}일 · ${esc(i.account)}`)).join(''), true)}
+      ${group('부수입', s.side, side.map(b => line(esc(b.memo), C.num(b.deposit) - C.num(b.withdrawal), `${b.tx_date.slice(5).replace('-', '/')} · ${esc(b.account)}`)).join(''), true)}`;
+  }
+  openModal(`${html}<div class="actions"><button class="btn" data-act="modalClose">닫기</button></div>`);
+}
 // ---------- 모바일: 넓은 표를 카드형 줄로 바꿀 수 있게 각 칸에 제목을 붙인다(화면 폭이 좁을 때만 CSS가 적용)
 function mobilize(root) {
   root.querySelectorAll('table.tbl').forEach(t => {
@@ -134,8 +168,8 @@ function viewHome() {
   return `
   <section class="hero">
     <div class="hero-main"><span>${mo}월 ${R.open ? '예상 ' : ''}남는 돈 <small>(카드는 쓴 달 기준)</small></span><b class="${s.canSave < 0 ? 'neg' : ''}">${s.canSave < 0 ? '▲ ' : ''}${won(s.canSave)}<small>원</small></b><em>${R.open ? `지금까지 쓴 돈만 빼면 ${won(R.leftNow)} · 남은 예산을 다 쓴다고 가정` : '이 달 확정 실적'}</em></div>
-    <div class="flow"><div><span>수입</span><b>${won(s.income)}</b><small>급여 ${won(s.incomePlan)}${s.side ? ` + 부수입 ${won(s.side)}` : ''}</small></div><i>−</i>
-      <div><span>쓴 돈</span><b>${won(R.spent.total)}</b><small>고정 + 카드 사용 + 할부 + 통장</small></div>${R.open ? `<i>−</i><div><span>남은 예산</span><b>${won(R.remain.total)}</b><small>변동 ${won(R.remain.variable)} · 식대 ${won(R.remain.meal)} · 고정카드 ${won(R.remain.fixedCard)}</small></div>` : ''}<i>=</i>
+    <div class="flow"><div class="tap" data-act="breakdown" data-k="income" role="button" tabindex="0"><span>수입 ›</span><b>${won(s.income)}</b><small>급여 ${won(s.incomePlan)}${s.side ? ` + 부수입 ${won(s.side)}` : ''}</small></div><i>−</i>
+      <div class="tap" data-act="breakdown" data-k="spent" role="button" tabindex="0"><span>쓴 돈 ›</span><b>${won(R.spent.total)}</b><small>고정 + 카드 사용 + 할부 + 통장</small></div>${R.open ? `<i>−</i><div class="tap" data-act="breakdown" data-k="remain" role="button" tabindex="0"><span>남은 예산 ›</span><b>${won(R.remain.total)}</b><small>변동 ${won(R.remain.variable)} · 식대 ${won(R.remain.meal)} · 고정카드 ${won(R.remain.fixedCard)}</small></div>` : ''}<i>=</i>
       <div><span>남는 돈</span><b>${won(s.canSave)}</b><small>저축·상환 여력</small></div></div>
     <div class="stack" role="img" aria-label="수입 대비 지출 구성">${parts.map(p => `<i class="sg-${p[2]}" style="flex:${p[1]}"></i>`).join('')}${s.canSave > 0 ? `<i class="sg-g" style="flex:${s.canSave}"></i>` : ''}</div>
     <div class="legend">${parts.map(p => `<span><i class="sg-${p[2]}"></i>${p[0]} <b>${won(p[1])}</b></span>`).join('')}${s.canSave > 0 ? `<span><i class="sg-g"></i>남는 돈 <b>${won(s.canSave)}</b></span>` : ''}</div>
@@ -150,7 +184,7 @@ function viewHome() {
   <div class="grid2"><div class="col">
   ${sec('자금 흐름 · 모임통장 잔액', !cf.tracked ? '<div class="empty">기초잔액 기준일 이전 달이라 잔액을 계산하지 않습니다.</div>' : `${cf.check ? `<div class="chk ${cf.check.diff ? 'bad' : ''}">${cf.check.diff ? `▲ 은행 잔액과 ${won(Math.abs(cf.check.diff))}원 차이` : '✔ 은행 잔액과 일치'} <small>${cf.check.date} 기준 은행 ${won(cf.check.bank)} · 장부 ${won(cf.check.mine)}</small></div>` : ''}
     <table class="tbl tl" data-mhead="2"><thead><tr><th class="r">일</th><th>내용</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>
-    <tr class="sum"><td></td><td>월초 잔액 <small class="muted">${s.cashflow.rows.some(r => r.next) || (master().incomes || []).some(i => i.early) ? '(이번 달분 선지급 월급 포함)' : ''}</small></td><td></td><td></td><td class="r">${won(cf.start)}</td></tr>${tlRows}
+    <tr class="sum"><td></td><td>월초 잔액</td><td></td><td></td><td class="r">${won(cf.start)}</td></tr>${tlRows}
     <tr class="sum"><td></td><td>예상 월말${cf.nextSalary ? ` <small class="muted">다음 달 월급 빼면 ${won(cf.end - cf.nextSalary)}</small>` : ''}</td><td></td><td></td><td class="r ${cf.end < 0 ? 'neg' : ''}">${won(cf.end)}</td></tr></tbody></table>
     <p class="muted small">실제 = 통장에 기록된 거래, 예정 = 운영 규칙으로 만든 일정입니다. 월초(${cf.fixedDay}일)에 고정지출을 개인통장으로 한 번에 빼고, ${cf.cardDay}일에 급여를 받은 뒤 카드대금(청구서 금액, 없으면 승인기준)과 용돈을 개인통장으로 보내며, 카드사 자동이체는 개인통장에서 나갑니다. 날짜는 기초 데이터 > 분류·기준에서 바꿉니다.</p>`)}
   ${sec('통장 쪼개기 · 이번 달 필요액', `<table class="tbl"><thead><tr><th>통장</th><th class="r hide-s">고정(이체)</th><th class="r hide-s">카드대금</th><th class="r">필요액</th><th>처리</th></tr></thead><tbody>${s.split.map(x => `<tr><td>${who(x.person)}${esc(x.account)}</td><td class="r hide-s">${won(x.fixedCash)}</td><td class="r hide-s">${won(x.cardBill)}</td><td class="r">${won(x.need)}</td><td>${esc(x.action)}</td></tr>`).join('')}
@@ -533,9 +567,10 @@ const ACT = {
   authMode() { S.authMode = S.authMode === 'up' ? 'in' : 'up'; render(); },
   async bioOn() { try { await bioEnable(S.session.user.email); S.unlocked = true; toast('다음부터 지문·얼굴로 열립니다.'); render(); } catch { toast('설정하지 못했습니다. 이 기기에서 지문·얼굴 인식이 켜져 있는지 확인해 주세요.', true); } },
   bioOff() { bioDisable(); toast('지문·얼굴 잠금을 껐습니다.'); render(); },
+  breakdown(el) { breakdownModal(el.dataset.k); },
   logout() { run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
   modalClose() { closeModal(); },
-  todo(el) { S.flash = el.dataset.flash || ''; if (el.dataset.kind !== undefined) S.cardFilter = { card: '', kind: el.dataset.kind }; },
+  todo(el) { closeModal(); S.flash = el.dataset.flash || ''; if (el.dataset.kind !== undefined) S.cardFilter = { card: '', kind: el.dataset.kind }; },
   billOpen(el) { S.billOpen = S.billOpen === el.dataset.card ? '' : el.dataset.card; const y = window.scrollY; render(); window.scrollTo(0, y); },
   bankSort() { S.bankSort = S.bankSort === 'asc' ? 'desc' : 'asc'; render(); },
   bankPaste() { bankPasteModal(); },

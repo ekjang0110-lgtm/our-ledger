@@ -172,8 +172,8 @@ export const unsettled = ctx => ctx.rows.filter(r => r.settle > 0 && !r.settle_d
 // 이번 청구월의 할부 내역(회차)
 export function billInstItems(ctx, m) {
   const out = [];
-  ctx.rows.filter(r => r.auto).forEach(r => { const d = monthDiff(r.billMonth, m); if (d >= 0 && d <= r.K - 1) out.push({ name: r.label || r.merchant, card: r.card, person: r.person, nth: d + 1, K: r.K, amount: d === 0 ? r.first : r.later, total: r.amount }); });
-  ctx.installments.forEach(i => { const v = num((i.charges || {})[m]); if (!v) return; const ms = Object.keys(i.charges || {}).filter(k => num(i.charges[k])).sort(); out.push({ name: i.item, card: i.card || '미지정', person: (ctx.cardMap[i.card] || {}).person || '', nth: ms.indexOf(m) + 1, K: ms.length, amount: v, total: sum(ms, k => i.charges[k]) }); });
+  ctx.rows.filter(r => r.auto).forEach(r => { const d = monthDiff(r.billMonth, m); if (d >= 0 && d <= r.K - 1) out.push({ name: r.label || r.merchant, card: r.card, person: r.person, nth: d + 1, K: r.K, amount: d === 0 ? r.first : r.later, total: r.amount, auto: true, used: r.used_date }); });
+  ctx.installments.forEach(i => { const v = num((i.charges || {})[m]); if (!v) return; const ms = Object.keys(i.charges || {}).filter(k => num(i.charges[k])).sort(); out.push({ name: i.item, card: i.card || '미지정', person: (ctx.cardMap[i.card] || {}).person || '', nth: ms.indexOf(m) + 1, K: ms.length, amount: v, total: sum(ms, k => i.charges[k]), auto: false }); });
   return out.sort((a, b) => a.card.localeCompare(b.card) || b.amount - a.amount);
 }
 // 청구월별 대시보드
@@ -304,7 +304,11 @@ export function cashFlow(ctx, m, today = todayStr()) {
   const al = Object.fromEntries(persons.map(p => [p, allowance(ctx, p, m)]));
   const fixed = (master.fixed_cash || []).map(f => ({ ...f, transfer: f.allowance ? (al[f.person] ? al[f.person].transfer : num(f.amount)) : num(f.amount) })).filter(f => f.transfer);
   const plan = [];
-  (master.incomes || []).filter(i => i.account === MAIN && num(i.amount)).forEach(i => plan.push(i.early ? { day: dim, label: `${i.name} (다음 달분, 말일 입금 예정)`, inn: num(i.amount), out: 0, person: i.person, kind: 'income', next: true } : { day: Math.min(num(i.day) || 1, dim), label: `${i.name} 입금`, inn: num(i.amount), out: 0, person: i.person, kind: 'income' }));
+  // 전월 말에 미리 들어오는 급여(영민)는 이번 달 1일 수입으로 본다
+  const hasEarly = (master.incomes || []).some(i => i.early && i.account === MAIN);
+  const earlySal = b => hasEarly && b.account === MAIN && b.category === '급여' && num(b.deposit) > 0 && Number(b.tx_date.slice(8)) >= 25;
+  const prevM = addMonth(m, -1), carryRows = ctx.bank.filter(b => b.tx_date.slice(0, 7) === prevM && earlySal(b)), carry = sum(carryRows, b => b.deposit);
+  (master.incomes || []).filter(i => i.account === MAIN && num(i.amount)).forEach(i => { if (i.early) { if (!carry && m >= cur) plan.push({ day: 1, label: `${i.name} (전월 말 입금 예정분)`, inn: num(i.amount), out: 0, person: i.person, kind: 'income', early: true }); } else plan.push({ day: Math.min(num(i.day) || 1, dim), label: `${i.name} 입금`, inn: num(i.amount), out: 0, person: i.person, kind: 'income' }); });
   const lump = fixed.filter(f => !f.allowance && f.account !== MAIN && f.account !== '현금');
   if (lump.length) plan.push({ day: fixedDay, label: '고정지출 일괄 출금 → 개인통장', inn: 0, out: sum(lump, f => f.transfer), kind: 'fixed', detail: lump.map(f => ({ name: f.name, amount: f.transfer, person: f.person })) });
   fixed.filter(f => !f.allowance && f.account === MAIN).forEach(f => plan.push({ day: Math.min(num(f.day) || 1, dim), label: f.name, inn: 0, out: f.transfer, person: f.person, kind: 'fixed' }));
@@ -316,16 +320,17 @@ export function cashFlow(ctx, m, today = todayStr()) {
   if (um >= cur) { const rest = monthSummary(ctx, um, today).result.remain.total; if (rest > 0) plan.push({ day: cardDay, label: `${Number(um.slice(5))}월 남은 예산 카드 사용 예상분`, inn: 0, out: rest, person: '공동', kind: 'card', estimated: true }); }
   plan.sort((a, b) => a.day - b.day || b.inn - a.inn);
   // 실제 거래 반영 범위
-  const sync = (master.bank_sync || {})[MAIN]; const acts = ctx.bank.filter(b => b.account === MAIN && b.tx_date.slice(0, 7) === m).sort((a, b) => a.tx_date.localeCompare(b.tx_date) || String(a.source_ref || '').localeCompare(String(b.source_ref || '')) || a.id - b.id);
+  const sync = (master.bank_sync || {})[MAIN]; const acts = ctx.bank.filter(b => b.account === MAIN && b.tx_date.slice(0, 7) === m && !earlySal(b)).sort((a, b) => a.tx_date.localeCompare(b.tx_date) || String(a.source_ref || '').localeCompare(String(b.source_ref || '')) || a.id - b.id);
   let covered = '';
   if (m < cur) covered = `${m}-${String(dim).padStart(2, '0')}`;
   else if (m === cur) { const last = acts.length ? acts[acts.length - 1].tx_date : ''; const sy = sync && sync.synced && sync.synced.slice(0, 7) === m ? sync.synced : ''; covered = [last, sy].sort().pop() || ''; }
   const coveredDay = covered ? Number(covered.slice(8)) : 0;
-  const start = !tracked ? null : m <= cur ? accountBalance(ctx, MAIN, `${m}-01`) : cashFlow(ctx, addMonth(m, -1), today).end;
+  const start = !tracked ? null : m <= cur ? accountBalance(ctx, MAIN, `${m}-01`) - carry : cashFlow(ctx, addMonth(m, -1), today).end;
   const rows = []; let bal = start;
+  if (carry) { if (bal !== null) bal += carry; rows.push({ day: 1, date: carryRows[0].tx_date, label: `${carryRows.map(b => b.memo).join(', ')}`, note: `${carryRows.map(b => b.tx_date).join(', ')} 입금 → 이번 달 1일 수입으로 봄`, category: '급여', inn: carry, out: 0, actual: true, bal, id: carryRows[0].id }); }
   acts.filter(b => b.tx_date <= (covered || '0000')).forEach(b => { if (bal !== null) bal += num(b.deposit) - num(b.withdrawal); rows.push({ day: Number(b.tx_date.slice(8)), date: b.tx_date, label: b.memo, note: b.note, category: b.category, inn: num(b.deposit), out: num(b.withdrawal), actual: true, bal, id: b.id }); });
   plan.filter(p => p.day > coveredDay).forEach(p => { if (bal !== null) bal += p.inn - p.out; rows.push({ ...p, actual: false, bal }); });
-  const nextSalary = sum(plan.filter(p => p.next && p.day > coveredDay), p => p.inn);
+  const nextSalary = 0;
   const low = rows.reduce((a, r) => r.bal !== null && (a === null || r.bal < a) ? r.bal : a, start);
   let check = null; if (sync && sync.balance !== null && sync.balance !== undefined && sync.last_date && sync.last_date.slice(0, 7) === m) { const mine = accountBalance(ctx, MAIN, addDay(sync.last_date)); check = { date: sync.last_date, bank: num(sync.balance), mine, diff: mine - num(sync.balance), synced: sync.synced }; }
   return ctx.memo[key] = { month: m, start, end: bal, rows, covered, coveredDay, nextSalary, low, check, tracked, fixedDay, cardDay };
