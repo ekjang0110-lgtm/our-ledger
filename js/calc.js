@@ -12,7 +12,7 @@ export function buildCtx(data) {
   const autoFrom = master.auto_inst_from || '0000-00-00';
   const rows = (data.card_tx || []).map(r => {
     const c = cardMap[r.card] || {}; const useMonth = r.used_date.slice(0, 7); const day = Number(r.used_date.slice(8, 10));
-    let billMonth = (c.issuer === 'kb' && r.pay_due) ? r.pay_due.slice(0, 7) : addMonth(useMonth, 1 + ((num(c.period_start) > 1 && day >= num(c.period_start)) ? 1 : 0));
+    let billMonth = r.pay_due ? r.pay_due.slice(0, 7) : addMonth(useMonth, 1 + ((num(c.period_start) > 1 && day >= num(c.period_start)) ? 1 : 0));
     const K = num(r.inst_months); const auto = K > 1 && r.used_date >= autoFrom && num(r.amount) > 0;
     const later = auto ? Math.floor(r.amount / K) : 0; const first = auto ? r.amount - later * (K - 1) : 0;
     const onnuri = Math.max(0, Math.min(num(r.onnuri), num(r.amount))), settle = num(r.settle);
