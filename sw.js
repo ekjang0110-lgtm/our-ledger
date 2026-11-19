@@ -1,5 +1,5 @@
 // 화면 파일만 보관(네트워크 우선). 가계부 데이터는 보관하지 않습니다.
-const CACHE = 'our-ledger-v14';
+const CACHE = 'our-ledger-v15';
 const SHELL = ['./', './index.html', './style.css', './js/app.js', './js/calc.js', './js/store.js', './js/parse.js', './js/ui.js', './js/decrypt.js', './js/biolock.js', './vendor/supabase.js', './vendor/xlsx.full.min.js', './icon.svg', './icon-192.png', './manifest.webmanifest'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(() => { })); });
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

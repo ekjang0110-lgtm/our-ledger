@@ -1,12 +1,12 @@
-import * as C from './calc.js?v=14';
-import { supabaseStore, demoStore } from './store.js?v=14';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=14';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=14';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=14';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=14';
+import * as C from './calc.js?v=15';
+import { supabaseStore, demoStore } from './store.js?v=15';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=15';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=15';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=15';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=15';
 
 const app = document.querySelector('#app');
-const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', flash: '', stage: {}, busy: false, authMode: 'in' };
+const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
 const LISTS = {};
 const NAV = [['home', '홈', '⌂'], ['cards', '카드', '▤'], ['bank', '통장', '⇄'], ['bills', '카드대금', '₩'], ['fixed', '고정지출', '▣'], ['more', '더보기', '⋯']];
 const MORE = [['budget', '예산', '변동지출 기본 예산과 월별 조정'], ['inst', '할부', '할부 청구 일정'], ['loans', '대출', '잔액과 상환 계획'], ['onnuri', '온누리', '개인 사용 누계·공용 충전 잔액'], ['goals', '목표', '5천만 목표·시나리오·가족행사'], ['tax', '연말정산', '카드공제 예상'], ['trend', '월별 추이', '월별 실적 한눈에'], ['closes', '월 마감 기록', '마감한 달의 숫자 보관'], ['master', '기초 데이터', '통장·카드·수입·고정지출·자동분류'], ['data', '데이터 관리', '가져오기·내보내기·엑셀 대조'], ['audit', '변경 이력', '누가 무엇을 바꿨는지'], ['account', '계정', '초대 코드·로그아웃']];
@@ -166,9 +166,14 @@ function viewHome() {
   const R = s.result; const parts = [['고정 이체', R.spent.fixedCash, 'a'], ['카드 사용', R.spent.card, 'b'], ['할부 납입', R.spent.inst, 'd'], ['통장 지출', R.spent.bank, 'f'], ['남은 예산', R.remain.total, 'c']].filter(p => p[1] > 0);
   const vRate = s.variableBudget ? s.variableActual / s.variableBudget : null; const unsettled = C.unsettled(S.ctx);
   const cf = s.cashflow; let marked = false;
-  const tlRows = cf.rows.map(t => { let pre = ''; if (!marked && !t.actual && cf.rows.some(r => r.actual)) { marked = true; pre = `<tr class="today"><td colspan="5">${cf.covered ? `${Number(cf.covered.slice(5, 7))}월 ${Number(cf.covered.slice(8))}일까지 실제 통장 내역` : ''} ▼ 아래는 앞으로 예정</td></tr>`; }
+  // 지난 실제 내역은 접어 두고, 지금 잔액부터 앞으로의 흐름이 먼저 보이게 한다 (펼치면 바로 확인)
+  const pastN = cf.rows.filter(r => r.actual).length, futN = cf.rows.length - pastN, fold = pastN > 0 && futN > 0;
+  const lastAct = fold ? [...cf.rows].reverse().find(r => r.actual) : null;
+  const pastIn = fold ? cf.rows.filter(r => r.actual).reduce((a, r) => a + r.inn, 0) : 0, pastOut = fold ? cf.rows.filter(r => r.actual).reduce((a, r) => a + r.out, 0) : 0;
+  const cvLabel = cf.covered ? `${Number(cf.covered.slice(5, 7))}월 ${Number(cf.covered.slice(8))}일` : '';
+  const tlRows = cf.rows.map(t => { let pre = ''; if (!marked && !t.actual && cf.rows.some(r => r.actual)) { marked = true; pre = fold ? `<tr class="sum nowbal"><td></td><td>지금 잔액 <small class="muted">${cvLabel}까지 실제 통장</small></td><td></td><td></td><td class="r"><b class="${lastAct.bal < 0 ? 'neg' : ''}">${won(lastAct.bal)}</b></td></tr><tr class="today"><td colspan="5">▼ 앞으로 예정</td></tr>` : `<tr class="today"><td colspan="5">${cvLabel ? `${cvLabel}까지 실제 통장 내역` : ''} ▼ 아래는 앞으로 예정</td></tr>`; }
     const det = t.detail ? `<br><small class="muted">${t.detail.map(d => `${esc(d.name)} ${won(d.amount)}`).join(' · ')}</small>` : t.note ? `<br><small class="muted">${esc(t.note)}</small>` : '';
-    return `${pre}<tr class="${t.actual ? 'past' : ''} ${t.next ? 'nextpay' : ''}"><td class="r">${t.day}일</td><td>${t.actual ? `<span class="src">실제</span>${t.category ? tag(t.category, 'cat') + ' ' : tag('! 미분류', 'warn') + ' '}` : t.estimated ? '<span class="src est">예정·승인기준</span>' : '<span class="src est">예정</span>'}${who(t.person)}${esc(t.label)}${det}</td><td class="r pos">${t.inn ? '+' + won(t.inn) : ''}</td><td class="r">${t.out ? '−' + won(t.out) : ''}</td><td class="r">${t.bal === null ? '' : `<b class="${t.bal < 0 ? 'neg' : ''}">${t.bal < 0 ? '▲ ' : ''}${won(t.bal)}</b>`}</td></tr>`; }).join('');
+    return `${pre}<tr class="${t.actual ? 'past' : ''}${t.actual && fold ? ' cfpast' : ''} ${t.next ? 'nextpay' : ''}"><td class="r">${t.day}일</td><td>${t.actual ? `<span class="src">실제</span>${t.category ? tag(t.category, 'cat') + ' ' : tag('! 미분류', 'warn') + ' '}` : t.estimated ? '<span class="src est">예정·승인기준</span>' : '<span class="src est">예정</span>'}${who(t.person)}${esc(t.label)}${det}</td><td class="r pos">${t.inn ? '+' + won(t.inn) : ''}</td><td class="r">${t.out ? '−' + won(t.out) : ''}</td><td class="r">${t.bal === null ? '' : `<b class="${t.bal < 0 ? 'neg' : ''}">${t.bal < 0 ? '▲ ' : ''}${won(t.bal)}</b>`}</td></tr>`; }).join('');
   const vrow = (name, sub, actual, budget, perDay) => { const left = budget - actual; return `<div class="vrow"><div class="vhead"><b>${name}</b><span><b>${won(actual)}</b> <small>/ ${won(budget)}</small></span></div>${bar(actual, budget)}<div class="vfoot"><span>${left < 0 ? tag(`▲ 초과 ${won(-left)}`, 'over') : `남음 ${won(left)}`}${sub ? ` · ${sub}` : ''}</span><span>${perDay === null || perDay === undefined ? '' : `하루 ${won(perDay)}`}</span></div></div>`; };
   return `
   <section class="hero">
@@ -188,8 +193,9 @@ function viewHome() {
   ${todo.length ? `<section class="card"><div class="sechead"><h2>확인할 것 ${todo.length}가지</h2><span class="muted small">누르면 해당 화면으로 가서 고칠 곳을 표시합니다</span></div><div class="todos">${todo.map(t => { const inner = `<b class="tn">!</b><div><strong>${esc(t[1])} <em>${esc(t[2])}</em></strong><small>${esc(t[3])}</small></div>${t[4] ? '<i>›</i>' : ''}`; return t[4] ? `<a class="todoitem" href="${t[4]}" data-act="todo" data-flash="${t[5]}" ${t[6] !== undefined ? `data-kind="${t[6]}"` : ''}>${inner}</a>` : `<div class="todoitem">${inner}</div>`; }).join('')}</div></section>` : ''}
   <div class="grid2"><div class="col">
   ${sec('자금 흐름 · 모임통장 잔액', !cf.tracked ? '<div class="empty">기초잔액 기준일 이전 달이라 잔액을 계산하지 않습니다.</div>' : `${cf.check ? `<div class="chk ${cf.check.diff ? 'bad' : ''}">${cf.check.diff ? `▲ 은행 잔액과 ${won(Math.abs(cf.check.diff))}원 차이` : '✔ 은행 잔액과 일치'} <small>${cf.check.date} 기준 은행 ${won(cf.check.bank)} · 장부 ${won(cf.check.mine)}</small></div>` : ''}
-    <table class="tbl tl" data-mhead="2"><thead><tr><th class="r">일</th><th>내용</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>
-    <tr class="sum"><td></td><td>월초 잔액</td><td></td><td></td><td class="r">${won(cf.start)}</td></tr>${tlRows}
+    <table class="tbl tl${fold && S.cfOpen ? ' cfopen' : ''}" data-mhead="2"><thead><tr><th class="r">일</th><th>내용</th><th class="r">입금</th><th class="r">출금</th><th class="r">잔액</th></tr></thead><tbody>
+    ${fold ? `<tr class="cffold"><td colspan="5"><button type="button" class="cfbtn" data-act="cfToggle" aria-expanded="${S.cfOpen ? 'true' : 'false'}"><span class="cfx">${S.cfOpen ? '▾ 지난 내역 접기' : '▸ 지난 내역 펼치기'}</span><span class="cfs">${pastN}건 · ${mo}월 1일~${Number((cf.covered || '').slice(8)) || ''}일 · 입금 +${won(pastIn)} · 출금 −${won(pastOut)}</span></button></td></tr>` : ''}
+    <tr class="sum${fold ? ' cfpast' : ''}"><td></td><td>월초 잔액</td><td></td><td></td><td class="r">${won(cf.start)}</td></tr>${tlRows}
     <tr class="sum"><td></td><td>예상 월말${cf.nextSalary ? ` <small class="muted">다음 달 월급 빼면 ${won(cf.end - cf.nextSalary)}</small>` : ''}</td><td></td><td></td><td class="r ${cf.end < 0 ? 'neg' : ''}">${won(cf.end)}</td></tr></tbody></table>
     <p class="muted small">실제 = 통장에 기록된 거래, 예정 = 운영 규칙으로 만든 일정입니다. 월초(${cf.fixedDay}일)에 고정지출을 개인통장으로 한 번에 빼고, ${cf.cardDay}일에 급여를 받은 뒤 카드대금(청구서 금액, 없으면 승인기준)과 용돈을 개인통장으로 보내며, 카드사 자동이체는 개인통장에서 나갑니다. 날짜는 기초 데이터 > 분류·기준에서 바꿉니다.</p>`)}
   ${sec('통장 쪼개기 · 이번 달 필요액', `<table class="tbl"><thead><tr><th>통장</th><th class="r hide-s">고정(이체)</th><th class="r hide-s">카드대금</th><th class="r">필요액</th><th>처리</th></tr></thead><tbody>${s.split.map(x => `<tr><td>${who(x.person)}${esc(x.account)}</td><td class="r hide-s">${won(x.fixedCash)}</td><td class="r hide-s">${won(x.cardBill)}</td><td class="r">${won(x.need)}</td><td>${esc(x.action)}</td></tr>`).join('')}
@@ -588,6 +594,7 @@ const ACT = {
   logout() { run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
   modalClose() { closeModal(); },
   todo(el) { closeModal(); S.flash = el.dataset.flash || ''; if (el.dataset.kind !== undefined) S.cardFilter = { card: '', kind: el.dataset.kind }; },
+  cfToggle(el) { S.cfOpen = !S.cfOpen; const t = el.closest('table'); t.classList.toggle('cfopen', S.cfOpen); el.setAttribute('aria-expanded', S.cfOpen ? 'true' : 'false'); el.querySelector('.cfx').textContent = S.cfOpen ? '▾ 지난 내역 접기' : '▸ 지난 내역 펼치기'; try { localStorage.setItem('ol_cfopen', S.cfOpen ? '1' : ''); } catch {} },
   billOpen(el) { S.billOpen = S.billOpen === el.dataset.card ? '' : el.dataset.card; const y = window.scrollY; render(); window.scrollTo(0, y); },
   bankSort() { S.bankSort = S.bankSort === 'asc' ? 'desc' : 'asc'; render(); },
   bankPaste() { bankPasteModal(); },

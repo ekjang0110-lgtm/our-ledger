@@ -187,3 +187,13 @@ tr.sub>td{padding:8px 10px!important}
 .applybar.bulk{flex-wrap:wrap;justify-content:flex-start;gap:8px 12px}.applybar.bulk>span{margin-right:0}.applybar.bulk .pick{flex:1 1 auto}.applybar.bulk .row{margin-left:auto}
 .btn[disabled]{opacity:.45;pointer-events:none}
 @media(max-width:860px){.ck{width:26px;height:26px;font-size:15px}.i1 .ck{margin-right:2px}.applybar.bulk{max-height:46vh;overflow:auto}.applybar.bulk .row{margin-left:0;width:100%;justify-content:flex-end}}
+/* v2.7 자금 흐름: 지난 내역 접기 */
+.tl:not(.cfopen) tr.cfpast{display:none!important}
+.tl tr.cffold td{padding:0;background:transparent!important;border-bottom:0}
+.cfbtn{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;width:100%;padding:9px 12px;border:1px dashed var(--line,#cfd8d4);border-radius:8px;background:var(--soft,#f3f6f4);font-size:13px}
+.cfbtn:hover,.cfbtn:focus-visible{border-color:#17403a;outline:none}
+.cfbtn .cfx{font-weight:700;color:#17403a}.cfbtn .cfs{color:var(--mut);font-size:12px}
+.tl.cfopen tr.cffold+tr{border-top:0}
+.tl tr.nowbal td{background:#e6f0ec!important;font-weight:700}
+@media(max-width:860px){.tbl.rt tr.cffold{padding:0;border:0}.tbl.rt tr.cffold td{flex:1 1 100%}}
+@media(max-width:860px){.tbl.rt.tl tr.today td{background:#17403a!important;color:#fff!important;text-align:center;border-radius:8px}.tbl.rt.tl tr.nowbal{background:#e6f0ec}}
