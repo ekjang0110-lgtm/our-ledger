@@ -198,3 +198,9 @@ tr.sub>td{padding:8px 10px!important}
 @media(max-width:860px){.tbl.rt tr.cffold{padding:0;border:0}.tbl.rt tr.cffold td{flex:1 1 100%}}
 @media(max-width:860px){.tbl.rt.tl tr.today td{background:#17403a!important;color:#fff!important;text-align:center;border-radius:8px}.tbl.rt.tl tr.nowbal{background:#e6f0ec}}
 .ck.ghostck{display:inline-flex;align-items:center;justify-content:center;border-style:dashed;color:var(--mut);cursor:default}
+/* v2.9 용돈 개인 몫 줄 */
+.hero .allowstrip{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;margin:10px 0 2px;padding:10px 14px;border:1px solid rgba(255,255,255,.18);border-radius:12px;background:rgba(255,255,255,.06);cursor:pointer}
+.hero .allowstrip .as-h{font-size:13px;opacity:.85;text-decoration:underline dotted;text-underline-offset:3px}
+.hero .allowstrip .as-p{display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.hero .allowstrip .as-p b{font-size:15px}
+.hero .allowstrip .as-p b.neg{color:#ffc9b8}
