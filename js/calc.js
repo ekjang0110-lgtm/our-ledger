@@ -19,9 +19,14 @@ export function buildCtx(data) {
     const billAmt = num(r.amount) - onnuri, prepaidEff = Math.max(0, Math.min(num(r.prepaid), billAmt));
     const resale = r.category === '리셀';
     // 반영액(예산): 할부는 월 납입액만, 정산 받을 돈·개인 온누리 사용분은 빼고, 리셀은 예산에서 제외
-    const applied = resale ? 0 : (auto ? first : num(r.amount)) + num(r.adjustment) - settle - (r.onnuri_shared ? 0 : onnuri);
-    return { ...r, applied, useMonth, billMonth, K, auto, first, later, onnuri, settle, billAmt, prepaidEff, resale, unclassified: !r.category && !r.fixed && num(r.amount) > 0, person: r.person || c.person || '' };
+    // 예산 나눠 반영(spread_months): 카드 청구는 그대로(일시불), 비용만 사용월부터 N개월로 나눈다. 첫 달 = 나머지 포함
+    const N = !resale && !auto && num(r.spread_months) > 1 && num(r.amount) > 0 ? num(r.spread_months) : 0;
+    const sLater = N ? Math.floor(num(r.amount) / N) : 0, sFirst = N ? num(r.amount) - sLater * (N - 1) : 0;
+    const applied = resale ? 0 : (auto ? first : N ? sFirst : num(r.amount)) + num(r.adjustment) - settle - (r.onnuri_shared ? 0 : onnuri);
+    return { ...r, applied, useMonth, billMonth, K, auto, first, later, onnuri, settle, billAmt, prepaidEff, resale, spread: N, spreadFirst: sFirst, spreadLater: sLater, unclassified: !r.category && !r.fixed && num(r.amount) > 0, person: r.person || c.person || '' };
   });
+  // 나눠 반영한 건의 2회차 이후: 카드대금·연말정산에는 안 잡히고(금액 0) 그 달 비용(반영액)에만 잡히는 줄
+  rows.filter(r => r.spread).forEach(r => { for (let i = 1; i < r.spread; i++) rows.push({ ...r, useMonth: addMonth(r.useMonth, i), amount: 0, raw_amount: 0, billAmt: 0, prepaidEff: 0, prepaid: 0, adjustment: 0, settle: 0, settle_done: false, onnuri: 0, applied: r.spreadLater, unclassified: false, spreadPart: i + 1 }); });
   return { ...data, master, cards, cardMap, rows, bank: data.bank_tx || [], bills: data.card_bills || [], installments: data.installments || [], loans: data.loans || [], memo: {} };
 }
 

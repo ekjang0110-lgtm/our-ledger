@@ -197,3 +197,4 @@ tr.sub>td{padding:8px 10px!important}
 .tl tr.nowbal td{background:#e6f0ec!important;font-weight:700}
 @media(max-width:860px){.tbl.rt tr.cffold{padding:0;border:0}.tbl.rt tr.cffold td{flex:1 1 100%}}
 @media(max-width:860px){.tbl.rt.tl tr.today td{background:#17403a!important;color:#fff!important;text-align:center;border-radius:8px}.tbl.rt.tl tr.nowbal{background:#e6f0ec}}
+.ck.ghostck{display:inline-flex;align-items:center;justify-content:center;border-style:dashed;color:var(--mut);cursor:default}
