@@ -105,10 +105,15 @@ export function monthSummary(ctx, m, today = todayStr()) {
   if (lumpDone) lumpItems.forEach(f => { f.done = true; f.lump = true; });
   const fixedCashTotal = sum(fixedCash, f => f.transfer);
   // 고정(카드)
+  const pmRows = ctx.rows.filter(r => r.useMonth === addMonth(m, -1) && r.fixed);
+  const dueDay = d => { const t = String(d || ''); if (/말일/.test(t)) return 31; const n = parseInt(t, 10); return n >= 1 && n <= 31 ? n : 0; };
   const fixedCard = (master.fixed_card || []).map(f => {
-    const actual = sum(rowsM.filter(r => r.label === f.name), r => r.applied);
-    return { ...f, actual, status: actual === 0 ? '대기' : (actual === num(f.budget) ? '일치' : '차이'), diff: actual - num(f.budget) };
-  });
+    const hit = rowsM.filter(r => r.label === f.name), actual = sum(hit, r => r.applied);
+    const date = hit.map(r => r.used_date).sort()[0] || '';
+    const prev = pmRows.filter(r => r.label === f.name).map(r => r.used_date).sort()[0];
+    const expDay = date ? Number(date.slice(8)) : (dueDay(f.due) || (prev ? Number(prev.slice(8)) : 0));
+    return { ...f, actual, date, expDay, status: actual === 0 ? '대기' : (actual === num(f.budget) ? '일치' : '차이'), diff: actual - num(f.budget) };
+  }).sort((a, b) => (a.expDay || 99) - (b.expDay || 99) || String(a.name).localeCompare(String(b.name), 'ko'));
   const fixedCardBudget = sum(fixedCard, f => f.budget);
   const fixedCardActual = sum(rowsM.filter(r => r.fixed), r => r.applied);
   const fixedNames = new Set(fixedCard.map(f => f.name));
@@ -161,7 +166,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
     billsMissing: bills.filter(b => b.actual === null && b.expected > 0).length,
     billsOver: bills.filter(b => b.discount !== null && b.discount < 0).length,
     carryAdvance: sum(persons, p => al[p].carryOver),
-    newInstallments: rowsM.filter(r => r.K > 1 && r.amount > 0).length,
+    newInstallments: rowsM.filter(r => r.K > 1 && r.amount > 0 && !r.inst_checked).length,
     bankReview: ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && (!b.category || b.category === '확인 필요')).length,
     unsettled: unsettled(ctx).length,
   };

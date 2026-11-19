@@ -1,14 +1,14 @@
 // 저장소: Supabase(실사용) / 메모리(데모·테스트)
 const URL_ = 'https://nmaibecunwprpuunizuu.supabase.co';
 const KEY_ = 'sb_publishable_J_aN_rr5fjloNj5S0iMEhQ_TplbuOQr';
-const CARD_COLS = ['card', 'person', 'approval_no', 'used_date', 'used_time', 'merchant', 'raw_amount', 'amount', 'canceled', 'inst_months', 'status', 'pay_due', 'issuer_discount', 'category', 'fixed', 'label', 'adjustment', 'prepaid', 'memo', 'source', 'raw', 'settle', 'settle_done', 'onnuri', 'onnuri_shared', 'spread_months'];
+const CARD_COLS = ['card', 'person', 'approval_no', 'used_date', 'used_time', 'merchant', 'raw_amount', 'amount', 'canceled', 'inst_months', 'status', 'pay_due', 'issuer_discount', 'category', 'fixed', 'label', 'adjustment', 'prepaid', 'memo', 'source', 'raw', 'settle', 'settle_done', 'onnuri', 'onnuri_shared', 'spread_months', 'inst_checked'];
 const BANK_COLS = ['tx_date', 'account', 'memo', 'deposit', 'withdrawal', 'category', 'fixed', 'note', 'source', 'source_ref'];
 const pick = (o, cols) => Object.fromEntries(cols.filter(c => o[c] !== undefined).map(c => [c, o[c]]));
 const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 const fail = e => { if (e) throw new Error(e.message || String(e)); };
 
 // 비어 있으면 안 되는 카드 열(DB not null)의 기본값
-const cardDefaults = r => ({ settle: r.settle ?? 0, settle_done: r.settle_done ?? false, onnuri: Number.isFinite(Number(r.onnuri)) && r.onnuri !== null && r.onnuri !== undefined ? Number(r.onnuri) : 0, onnuri_shared: r.onnuri_shared ?? false, adjustment: r.adjustment ?? 0, prepaid: r.prepaid ?? 0, issuer_discount: r.issuer_discount ?? 0, spread_months: r.spread_months ?? 0 });
+const cardDefaults = r => ({ settle: r.settle ?? 0, settle_done: r.settle_done ?? false, onnuri: Number.isFinite(Number(r.onnuri)) && r.onnuri !== null && r.onnuri !== undefined ? Number(r.onnuri) : 0, onnuri_shared: r.onnuri_shared ?? false, adjustment: r.adjustment ?? 0, prepaid: r.prepaid ?? 0, issuer_discount: r.issuer_discount ?? 0, spread_months: r.spread_months ?? 0, inst_checked: r.inst_checked ?? false });
 export function supabaseStore() {
   const sb = window.supabase.createClient(URL_, KEY_, { auth: { persistSession: true, autoRefreshToken: true } });
   let hid = null;

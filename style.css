@@ -230,3 +230,13 @@ tr.sub>td{padding:8px 10px!important}
 .alist .al .m{flex:1;min-width:0;display:flex;flex-direction:column;font-size:14px}
 .alist .al .m small{font-size:11px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .alist .al b{white-space:nowrap;font-size:14px;font-variant-numeric:tabular-nums}
+.miniok{all:unset;cursor:pointer;display:inline-block;margin-right:4px;padding:2px 8px;border-radius:999px;border:1px solid #17403a;color:#17403a;font-size:11.5px;font-weight:700;background:#fff}
+.miniok:hover,.miniok:focus-visible{background:#17403a;color:#fff}
+.alist summary{display:flex;align-items:center;gap:8px}
+.alist summary span{flex:1}
+.alist summary b{font-size:13px;color:var(--ink,#1d2a27)}
+.alist .agg{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.alist .agg span{display:inline-flex;align-items:baseline;gap:5px;padding:5px 10px;border-radius:999px;background:var(--soft,#f3f6f4);font-size:12.5px}
+.alist .agg small{color:var(--mut);font-size:11px}
+.alist .agg b{font-size:12.5px}
+td.nowrap{white-space:nowrap}

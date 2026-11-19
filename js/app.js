@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=18';
-import { supabaseStore, demoStore } from './store.js?v=18';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=18';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=18';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=18';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=18';
+import * as C from './calc.js?v=19';
+import { supabaseStore, demoStore } from './store.js?v=19';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=19';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=19';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=19';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=19';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -42,9 +42,12 @@ async function enter() {
 
 // ---------- 용돈(개인 몫) 남은 금액: 예산(기본+식대) − 이번 달 용돈 카드 사용 − 이번 달 가불 − 지난달 초과·가불로 이번 달 이체에서 뺀 금액
 const allowLeft = a => a.budget - a.used - a.advance - a.deducted;
+const sum = (xs, f) => xs.reduce((t, x) => t + (Number(f(x)) || 0), 0);
+// 용돈 쓴 내역 집계: 내용(라벨)이 같은 것끼리, 금액 큰 순
+const aggBy = rows => { const g = new Map(); rows.forEach(r => { const k = (r.label || r.merchant || '기타').replace(/\s*\(.*\)$/, ''); const o = g.get(k) || { k, n: 0, v: 0 }; o.n++; o.v += r.applied; g.set(k, o); }); return [...g.values()].sort((a, b) => b.v - a.v); };
 function allowStrip(s) {
   const ps = (s.persons || []).filter(p => s.allowance[p] && s.allowance[p].budget); if (!ps.length) return '';
-  return `<div class="allowstrip tap" data-act="breakdown" data-k="allow" role="button" tabindex="0"><div class="as-h"><span>용돈 (개인 몫) ›</span><small>식대 포함 · 공동 예산과 별도</small></div>${ps.map(p => { const a = s.allowance[p], v = allowLeft(a); return `<div class="as-p">${who(p)}<span class="as-n">${esc(p)}<small>예산 ${won(a.budget)} · 사용 ${won(a.used + a.advance)}</small></span><b class="${v < 0 ? 'neg' : ''}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</b></div>`; }).join('')}</div>`;
+  return `<div class="allowstrip tap" data-act="breakdown" data-k="allow" role="button" tabindex="0"><div class="as-h"><span>용돈 (개인 몫) ›</span><small>이번 달 예산 기준 · 식대 포함</small></div>${ps.map(p => { const a = s.allowance[p], v = allowLeft(a); return `<div class="as-p">${who(p)}<span class="as-n">${esc(p)}<small>예산 ${won(a.budget)} · 사용 ${won(a.used + a.advance)}</small></span><b class="${v < 0 ? 'neg' : ''}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</b></div>`; }).join('')}</div>`;
 }
 // ---------- 홈 금액 상세(수입·쓴 돈·남은 예산)
 function breakdownModal(kind) {
@@ -75,16 +78,16 @@ function breakdownModal(kind) {
   } else if (kind === 'allow') {
     const ps = s.persons.filter(p => s.allowance[p] && s.allowance[p].budget);
     const calcRow = (lab, amt, sub = '', cls = '') => `<div class="ac ${cls}"><span>${lab}${sub ? `<small>${sub}</small>` : ''}</span><b>${amt}</b></div>`;
-    html = `<h2>${mo}월 용돈 <small class="muted">개인 몫</small></h2><p class="muted small">식대도 용돈 예산에 들어 있고, 공동 예산과는 따로 봅니다. 초과분은 다음 달 용돈 이체에서 빠집니다.</p>
+    html = `<h2>${mo}월 용돈 <small class="muted">개인 몫</small></h2><p class="muted small">식대도 용돈 예산에 들어 있고, 공동 예산과는 따로 봅니다. 이번 달 예산만 계산하고, 초과분은 각자 비자금으로 채웁니다(다음 달로 넘기지 않음). 가불만 다음 달 용돈에서 갚습니다.</p>
       ${ps.map(p => { const a = s.allowance[p], v = allowLeft(a);
         const rows = S.ctx.rows.filter(r => r.useMonth === m && r.person === p && (r.category === '용돈' || r.category === '용돈가불') && r.applied).sort((x, y) => (x.used_date + (x.used_time || '')).localeCompare(y.used_date + (y.used_time || '')));
         return `<section class="acard"><header>${who(p)}<b>${esc(p)} 용돈</b><em class="${v < 0 ? 'neg' : 'pos'}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</em></header>
         <div class="acalc">${calcRow('예산', won(a.budget), `기본 ${won(a.base)}${a.meal ? ` + 식대 ${won(a.meal)}` : ''}`)}
-          ${a.deducted ? calcRow('− 지난달 몫 차감', won(a.deducted), [a.cardDeduct ? `카드 초과 ${won(a.cardDeduct)}` : '', a.prevAdvance ? `가불 ${won(a.prevAdvance)}` : '', a.prevCarry ? `이월 ${won(a.prevCarry)}` : ''].filter(Boolean).join(' · ') + ` → 이번 달 이체 ${won(a.transfer)}`) : ''}
+          ${a.deducted ? calcRow('− 지난달 가불 상환', won(a.deducted), `가불은 다음 달 용돈에서 갚기로 한 돈 → 이번 달 이체 ${won(a.transfer)}`) : ''}
           ${calcRow('− 용돈 카드 사용', won(a.used), `${rows.filter(r => r.category === '용돈').length}건`)}
           ${a.advance ? calcRow('− 이번 달 가불', won(a.advance), '다음 달 이체에서 차감') : ''}
           ${calcRow(v < 0 ? '= 초과' : '= 남음', (v < 0 ? '▲ ' : '') + won(Math.abs(v)), '', 'tot ' + (v < 0 ? 'neg' : ''))}</div>
-        <details class="alist" ${rows.length ? 'open' : ''}><summary>쓴 내역 ${rows.length}건</summary>${rows.length ? rows.map(r => `<div class="al"><span class="d">${r.used_date.slice(5).replace('-', '/')}</span><span class="m">${esc(r.label || r.merchant)}<small>${esc(r.card)}${r.category === '용돈가불' ? ' · 가불' : ''}${r.memo ? ' · ' + esc(r.memo) : ''}</small></span><b>${won(r.applied)}</b></div>`).join('') : '<p class="muted small">이번 달 용돈 카드 사용이 없습니다.</p>'}</details></section>`; }).join('')}`;
+        <details class="alist" ${rows.length ? 'open' : ''}><summary><span>쓴 내역 ${rows.length}건</span><b>합계 ${won(sum(rows, r => r.applied))}</b></summary>${rows.length > 1 ? `<div class="agg">${aggBy(rows).map(g => `<span>${esc(g.k)} <small>${g.n}건</small> <b>${won(g.v)}</b></span>`).join('')}</div>` : ''}${rows.length ? rows.map(r => `<div class="al"><span class="d">${r.used_date.slice(5).replace('-', '/')}</span><span class="m">${esc(r.label || r.merchant)}<small>${esc(r.card)}${r.category === '용돈가불' ? ' · 가불' : ''}${r.memo ? ' · ' + esc(r.memo) : ''}</small></span><b>${won(r.applied)}</b></div>`).join('') : '<p class="muted small">이번 달 용돈 카드 사용이 없습니다.</p>'}</details></section>`; }).join('')}`;
   } else {
     const side = S.ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && b.category === '부수입');
     html = `<h2>${mo}월 수입 ${won(s.income)}원</h2><p class="muted small">급여는 기초 데이터의 계획 금액, 부수입은 통장에 "부수입"으로 기록된 금액입니다. 영민 월급은 전월 말에 들어와도 이번 달 수입으로 봅니다.</p>
@@ -247,10 +250,10 @@ function viewFixed() {
     ${s.fixedCash.map((f, i) => `<tr><td>${who(f.person)}${esc(f.name)}${f.allowance && f.transfer !== f.amount ? ` <small class="muted">(기본 ${won(f.amount)})</small>` : ''}${f.note ? `<br><small class="muted">${esc(f.note)}</small>` : ''}</td><td class="hide-s">${esc(f.account)}</td><td class="r">${f.day}일</td><td class="r">${won(f.transfer)}</td><td class="c"><button class="check ${f.done ? 'on' : ''}" data-act="fixedDone" data-i="${i}" title="이체 완료 기록" aria-label="${f.done ? '완료됨' : '미완료'}">${f.done ? '✔' : ''}</button></td></tr>`).join('')}
     <tr class="sum"><td>합계</td><td class="hide-s"></td><td></td><td class="r">${won(s.fixedCashTotal)}</td><td class="c">${doneN}/${s.fixedCash.length}</td></tr></tbody></table>
     <p class="muted small">완료 칸을 누르면 통장 거래(분류 "고정")가 함께 기록됩니다. 다시 누르면 그 기록을 지웁니다.</p>`, `<a class="link" href="#/more/master">항목 편집</a>`)}</div>
-  <div class="col">${sec('고정지출 (카드)', `<table class="tbl"><thead><tr><th>항목</th><th class="hide-s">카드</th><th class="r">예산</th><th class="r">승인</th><th class="c">상태</th></tr></thead><tbody>
-    ${s.fixedCard.map(f => `<tr class="${fl('fixedwait', f.status === '대기').trim()}"><td>${who(f.person)}${esc(f.name)}${f.due ? `<br><small class="muted">${esc(f.due)}</small>` : ''}</td><td class="hide-s">${esc(f.card || '-')}</td><td class="r">${won(f.budget)}</td><td class="r">${f.actual ? won(f.actual) : ''}</td><td class="c">${f.status === '대기' ? tag('대기', 'wait') : f.status === '일치' ? tag('✔ 일치', 'ok') : tag(signed(f.diff), 'warn')}</td></tr>`).join('')}
-    ${s.fixedCardOther.length ? `<tr><td colspan="2">그 외 고정 표시 ${s.fixedCardOther.length}건</td><td></td><td class="r">${won(s.fixedCardOther.reduce((a, r) => a + r.applied, 0))}</td><td class="c">${tag('! 항목명 확인', 'warn')}</td></tr>` : ''}
-    <tr class="sum"><td>합계</td><td class="hide-s"></td><td class="r">${won(s.fixedCardBudget)}</td><td class="r">${won(s.fixedCardActual)}</td><td></td></tr></tbody></table>
+  <div class="col">${sec('고정지출 (카드)', `<table class="tbl"><thead><tr><th class="r">일</th><th>항목</th><th class="hide-s">카드</th><th class="r">예산</th><th class="r">승인</th><th class="c">상태</th></tr></thead><tbody>
+    ${s.fixedCard.map(f => `<tr class="${fl('fixedwait', f.status === '대기').trim()}"><td class="r nowrap">${f.date ? `${Number(f.date.slice(8))}일` : f.expDay ? `<span class="muted" title="지난달 결제일·결제일 기준 예상">~${f.expDay === 31 ? '말' : f.expDay}일</span>` : '<span class="muted">-</span>'}</td><td>${who(f.person)}${esc(f.name)}${f.due ? `<br><small class="muted">${esc(f.due)}</small>` : ''}</td><td class="hide-s">${esc(f.card || '-')}</td><td class="r">${won(f.budget)}</td><td class="r">${f.actual ? won(f.actual) : ''}</td><td class="c">${f.status === '대기' ? tag('대기', 'wait') : f.status === '일치' ? tag('✔ 일치', 'ok') : tag(signed(f.diff), 'warn')}</td></tr>`).join('')}
+    ${s.fixedCardOther.length ? `<tr><td></td><td colspan="2">그 외 고정 표시 ${s.fixedCardOther.length}건</td><td></td><td class="r">${won(s.fixedCardOther.reduce((a, r) => a + r.applied, 0))}</td><td class="c">${tag('! 항목명 확인', 'warn')}</td></tr>` : ''}
+    <tr class="sum"><td></td><td>합계</td><td class="hide-s"></td><td class="r">${won(s.fixedCardBudget)}</td><td class="r">${won(s.fixedCardActual)}</td><td></td></tr></tbody></table>
     <p class="muted small">"대기"는 이번 달에 그 항목 이름으로 고정 표시된 카드 결제가 아직 없다는 뜻입니다. 결제일이 지나 카드 파일을 올리면 자동으로 채워집니다. 금액이 예산과 다르면 차이를 표시합니다.</p>`, `<a class="link" href="#/more/master">항목 편집</a>`)}</div></div>`;
 }
 function billTable(s, editable = false) {
@@ -308,7 +311,7 @@ function viewCards() {
   ${rs.length ? rs.map(r => `<div class="item ${r.canceled ? 'cancel' : ''}${fl('un', r.unclassified)}${fl('settle', r.settle > 0 && !r.settle_done)}${fl('inst', r.K > 1 && r.amount > 0)}" data-act="cardEdit" data-id="${r.id}"${r.spreadPart ? '' : ` data-sel="${S.sel.has(r.id) ? 1 : 0}"`}>
     <div class="i1">${r.spreadPart ? '<span class="ck ghostck" aria-hidden="true">↻</span>' : `<button class="ck ${S.sel.has(r.id) ? 'on' : ''}" data-act="selToggle" data-id="${r.id}" role="checkbox" aria-checked="${S.sel.has(r.id)}" aria-label="선택">${S.sel.has(r.id) ? '✔' : ''}</button>`}<span class="d dt">${r.used_date.slice(5).replace('-', '/')}${r.used_time ? ` <small>${esc(String(r.used_time).slice(0, 5))}</small>` : ''}</span>${who(r.person)}<span class="m">${esc(r.label || r.merchant)}</span><b class="a">${won(r.applied)}</b></div>
     <div class="i2"><span>${esc(r.card)}${r.label ? ' · ' + esc(r.merchant) : ''}${r.K > 1 ? ` · ${r.K}개월 할부${r.auto ? ` (총 ${won(r.amount)})` : ''}` : ''}${r.spread ? (r.spreadPart ? ` · ${Number(r.used_date.slice(5, 7))}월 결제 ${won(r.spreadFirst + r.spreadLater * (r.spread - 1))} 나눠 반영 ${r.spreadPart}/${r.spread}회` : ` · 일시불 ${won(r.amount)} → 예산 ${r.spread}개월 나눠 반영 1/${r.spread}회`) : ''}${r.canceled ? ' · 취소' : ''}${r.adjustment ? ` · 조정 ${signed(r.adjustment)}` : ''}${r.prepaid ? ` · 선결제 ${won(r.prepaid)}` : ''}${r.settle ? ` · 정산 −${won(r.settle)}(${r.settle_done ? '받음' : '미수'})` : ''}${r.onnuri ? ` · 온누리 ${won(r.onnuri)}` : ''}${r.memo && !r.unclassified ? ' · ' + esc(r.memo) : ''}</span>
-      <span>${r.fixed ? tag('고정', 'fix') : ''}${r.category ? tag(r.category, 'cat') : (r.unclassified ? tag('미분류', 'warn') : '')}</span></div>
+      <span>${r.K > 1 && r.amount > 0 && !r.spreadPart ? (r.inst_checked ? tag('할부 확인됨', 'ok') : `<button type="button" class="miniok" data-act="instOk" data-id="${r.id}">✔ 할부 맞음</button>`) : ''}${r.fixed ? tag('고정', 'fix') : ''}${r.category ? tag(r.category, 'cat') : (r.unclassified ? tag('미분류', 'warn') : '')}</span></div>
     ${r.unclassified ? stage(r) : ''}</div>`).join('') : '<div class="empty">이 조건의 카드 내역이 없습니다.</div>'}</section>
   ${S.sel.size ? bulkBar(rs) : unAll ? applyBar() : ''}`;
 }
@@ -459,7 +462,7 @@ function bankModal(b) {
 }
 // ---------- 카드대금
 function viewBills() {
-  const m = S.month, s = C.monthSummary(S.ctx, m); const months = Array.from({ length: 9 }, (_, i) => C.addMonth(m, i - 5)); const board = C.billBoard(S.ctx, months); const max = Math.max(1, ...board.map(b => b.expected)); const cards = S.ctx.cards;
+  const m = S.month, s = C.monthSummary(S.ctx, m); const firstBill = C.billMonthRange(S.ctx).first || m; const months = Array.from({ length: 9 }, (_, i) => C.addMonth(m, i - 5)).filter(x => x >= firstBill); const board = C.billBoard(S.ctx, months); const max = Math.max(1, ...board.map(b => b.expected)); const cards = S.ctx.cards;
   const items = C.billInstItems(S.ctx, m); const cur = C.todayStr().slice(0, 7); const curBill = s;
   return `<div class="kpis four">${kpi(`${Number(m.slice(5))}월 청구 승인기준`, won(s.billTotal.expected), `${s.bills.filter(b => b.expected > 0).length}개 카드`)}${kpi('일시불', won(s.billTotal.lump), '선결제 제외')}${kpi('할부', won(s.billTotal.installment), `${items.length}건 납입`)}${kpi('실제 청구', s.billTotal.actual === null ? '대기' : won(s.billTotal.actual), s.billTotal.actual === null ? '청구서 금액을 입력하세요' : `차액 ${signed(-s.billTotal.discount)}`)}</div>
   ${sec(`${monthLabel(m)} 청구`, `${billTable(s, true)}<p class="muted small">승인기준 = 일시불(선결제·온누리 제외) + 할부(이번 달 납입분). 할부 금액(▸)을 누르면 그 카드의 할부 건이 아래에 펼쳐집니다. 청구서 금액을 넣으면 승인기준과의 차액이 표시됩니다. 카드사 할인은 각자 개인 몫이라 따로 모으지 않습니다.</p>`)}
@@ -621,6 +624,7 @@ const ACT = {
   bankPaste() { bankPasteModal(); },
   jump(el) { document.getElementById(el.dataset.to)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   cardFilter(el) { S.cardFilter[el.dataset.k] = el.dataset.v; S.sel.clear(); render(); },
+  instOk(el) { const id = Number(el.dataset.id); run(async () => { const row = await S.store.updateCard(id, { inst_checked: true }); Object.assign(S.data.card_tx.find(x => x.id === id), row); rebuild(); keepScroll(); }, '할부 확인했습니다.'); },
   selToggle(el) { const id = Number(el.dataset.id); S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
   selAll() { const rs = cardRows(); const all = rs.every(r => S.sel.has(r.id)); rs.forEach(r => all ? S.sel.delete(r.id) : S.sel.add(r.id)); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
   selClear() { S.sel.clear(); S.bulkCat = ''; keepScroll(); },
