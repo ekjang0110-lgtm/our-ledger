@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=17';
-import { supabaseStore, demoStore } from './store.js?v=17';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=17';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=17';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=17';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=17';
+import * as C from './calc.js?v=18';
+import { supabaseStore, demoStore } from './store.js?v=18';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=18';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=18';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=18';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=18';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -44,7 +44,7 @@ async function enter() {
 const allowLeft = a => a.budget - a.used - a.advance - a.deducted;
 function allowStrip(s) {
   const ps = (s.persons || []).filter(p => s.allowance[p] && s.allowance[p].budget); if (!ps.length) return '';
-  return `<div class="allowstrip tap" data-act="breakdown" data-k="allow" role="button" tabindex="0"><span class="as-h">용돈 (개인 몫) ›</span>${ps.map(p => { const v = allowLeft(s.allowance[p]); return `<span class="as-p">${who(p)}<b class="${v < 0 ? 'neg' : ''}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</b></span>`; }).join('')}</div>`;
+  return `<div class="allowstrip tap" data-act="breakdown" data-k="allow" role="button" tabindex="0"><div class="as-h"><span>용돈 (개인 몫) ›</span><small>식대 포함 · 공동 예산과 별도</small></div>${ps.map(p => { const a = s.allowance[p], v = allowLeft(a); return `<div class="as-p">${who(p)}<span class="as-n">${esc(p)}<small>예산 ${won(a.budget)} · 사용 ${won(a.used + a.advance)}</small></span><b class="${v < 0 ? 'neg' : ''}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</b></div>`; }).join('')}</div>`;
 }
 // ---------- 홈 금액 상세(수입·쓴 돈·남은 예산)
 function breakdownModal(kind) {
@@ -73,8 +73,18 @@ function breakdownModal(kind) {
       ${group('식대 (용돈 예산 중)', R.remain.meal, s.persons.filter(p => s.allowance[p].meal).map(p => { const a = s.allowance[p]; return line(`${who(p)}${p} 식대`, Math.max(0, a.meal - a.used), `식대 예산 ${won(a.meal)} · 용돈 사용 ${won(a.used)}`); }).join(''), true)}
       ${group('아직 결제 안 된 고정(카드)', R.remain.fixedCard, s.fixedCard.filter(f => f.status === '대기').map(f => line(`${who(f.person)}${esc(f.name)}`, f.budget, esc(f.card || ''))).join(''), true)}`;
   } else if (kind === 'allow') {
-    html = `<h2>${mo}월 용돈 (개인 몫)</h2><p class="muted small">남은 용돈 = 예산(기본 + 식대) − 이번 달 용돈 카드 사용 − 이번 달 가불 − 지난달 초과·가불로 이번 달 이체에서 뺀 금액. 초과분은 다음 달 이체에서 빠집니다.</p>
-      ${s.persons.filter(p => s.allowance[p] && s.allowance[p].budget).map(p => { const a = s.allowance[p], v = allowLeft(a); return group(`${p} 용돈 ${v < 0 ? '초과' : '남음'}`, v, [line('예산 (기본 + 식대)', a.budget, `기본 ${won(a.base)} · 식대 ${won(a.meal)}`), line('이번 달 이체', a.transfer, a.deducted ? `지난달 몫 ${won(a.deducted)} 차감${a.cardDeduct ? ` (카드 초과 ${won(a.cardDeduct)})` : ''}${a.prevAdvance ? ` (가불 ${won(a.prevAdvance)})` : ''}` : '차감 없음'), line('용돈 카드 사용', a.used ? -a.used : 0, '카테고리 "용돈"'), a.advance ? line('이번 달 가불', -a.advance, '다음 달 이체에서 차감') : ''].join(''), true); }).join('')}`;
+    const ps = s.persons.filter(p => s.allowance[p] && s.allowance[p].budget);
+    const calcRow = (lab, amt, sub = '', cls = '') => `<div class="ac ${cls}"><span>${lab}${sub ? `<small>${sub}</small>` : ''}</span><b>${amt}</b></div>`;
+    html = `<h2>${mo}월 용돈 <small class="muted">개인 몫</small></h2><p class="muted small">식대도 용돈 예산에 들어 있고, 공동 예산과는 따로 봅니다. 초과분은 다음 달 용돈 이체에서 빠집니다.</p>
+      ${ps.map(p => { const a = s.allowance[p], v = allowLeft(a);
+        const rows = S.ctx.rows.filter(r => r.useMonth === m && r.person === p && (r.category === '용돈' || r.category === '용돈가불') && r.applied).sort((x, y) => (x.used_date + (x.used_time || '')).localeCompare(y.used_date + (y.used_time || '')));
+        return `<section class="acard"><header>${who(p)}<b>${esc(p)} 용돈</b><em class="${v < 0 ? 'neg' : 'pos'}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</em></header>
+        <div class="acalc">${calcRow('예산', won(a.budget), `기본 ${won(a.base)}${a.meal ? ` + 식대 ${won(a.meal)}` : ''}`)}
+          ${a.deducted ? calcRow('− 지난달 몫 차감', won(a.deducted), [a.cardDeduct ? `카드 초과 ${won(a.cardDeduct)}` : '', a.prevAdvance ? `가불 ${won(a.prevAdvance)}` : '', a.prevCarry ? `이월 ${won(a.prevCarry)}` : ''].filter(Boolean).join(' · ') + ` → 이번 달 이체 ${won(a.transfer)}`) : ''}
+          ${calcRow('− 용돈 카드 사용', won(a.used), `${rows.filter(r => r.category === '용돈').length}건`)}
+          ${a.advance ? calcRow('− 이번 달 가불', won(a.advance), '다음 달 이체에서 차감') : ''}
+          ${calcRow(v < 0 ? '= 초과' : '= 남음', (v < 0 ? '▲ ' : '') + won(Math.abs(v)), '', 'tot ' + (v < 0 ? 'neg' : ''))}</div>
+        <details class="alist" ${rows.length ? 'open' : ''}><summary>쓴 내역 ${rows.length}건</summary>${rows.length ? rows.map(r => `<div class="al"><span class="d">${r.used_date.slice(5).replace('-', '/')}</span><span class="m">${esc(r.label || r.merchant)}<small>${esc(r.card)}${r.category === '용돈가불' ? ' · 가불' : ''}${r.memo ? ' · ' + esc(r.memo) : ''}</small></span><b>${won(r.applied)}</b></div>`).join('') : '<p class="muted small">이번 달 용돈 카드 사용이 없습니다.</p>'}</details></section>`; }).join('')}`;
   } else {
     const side = S.ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && b.category === '부수입');
     html = `<h2>${mo}월 수입 ${won(s.income)}원</h2><p class="muted small">급여는 기초 데이터의 계획 금액, 부수입은 통장에 "부수입"으로 기록된 금액입니다. 영민 월급은 전월 말에 들어와도 이번 달 수입으로 봅니다.</p>
@@ -173,7 +183,7 @@ function viewHome() {
     [ck.newInstallments, '이번 달 새 할부 결제', `${ck.newInstallments}건`, '할부로 결제한 건이 맞는지 확인(다음 달부터 나눠 청구)', '#/cards', 'inst', 'inst'], [ck.carryAdvance, '이월 중인 가불', `${won(ck.carryAdvance)}원`, '다음 달 용돈에서 차감 예정', '', '']].filter(t => t[0]);
   const alRow = (label, f, cls = '') => `<tr class="${cls}"><td>${label}</td>${s.persons.map(p => `<td class="r">${f(s.allowance[p])}</td>`).join('')}</tr>`;
   const R = s.result; const parts = [['고정 이체', R.spent.fixedCash, 'a'], ['카드 사용', R.spent.card, 'b'], ['할부 납입', R.spent.inst, 'd'], ['통장 지출', R.spent.bank, 'f'], ['남은 예산', R.remain.total, 'c']].filter(p => p[1] > 0);
-  const vRate = s.variableBudget ? s.variableActual / s.variableBudget : null; const unsettled = C.unsettled(S.ctx);
+  const vRate = s.sharedBudget ? s.sharedActual / s.sharedBudget : null; const unsettled = C.unsettled(S.ctx);
   const cf = s.cashflow; let marked = false;
   // 지난 실제 내역은 접어 두고, 지금 잔액부터 앞으로의 흐름이 먼저 보이게 한다 (펼치면 바로 확인)
   const pastN = cf.rows.filter(r => r.actual).length, futN = cf.rows.length - pastN, fold = pastN > 0 && futN > 0;
@@ -196,7 +206,7 @@ function viewHome() {
   </section>
   <div class="kpis four">
     ${kpi('모임통장 예상 월말', cf.end === null ? '-' : won(cf.end), cf.nextSalary ? `다음 달 월급 ${won(cf.nextSalary)} 포함 · 빼면 <b>${won(cf.end - cf.nextSalary)}</b>` : !cf.tracked ? '기초잔액 기준일 이전 달' : `월초 ${won(cf.start)} · 월중 최저 ${won(cf.low)}`, cf.end < 0 || cf.low < 0 ? 'neg' : '')}
-    ${kpi('변동지출 사용', `${won(s.variableActual)}`, `예산 ${won(s.variableBudget)} 중 ${pct(vRate)} · 남은 ${s.daysLeft}일`, vRate > 1 ? 'neg' : '')}
+    ${kpi('공동 변동지출 사용', `${won(s.sharedActual)}`, `예산 ${won(s.sharedBudget)} 중 ${pct(vRate)} · 남은 ${s.daysLeft}일 (식대 제외)`, vRate > 1 ? 'neg' : '')}
     ${kpi('고정지출 이체', `${s.fixedCash.filter(f => f.done).length} / ${s.fixedCash.length} 완료`, `합계 ${won(s.fixedCashTotal)} · <a href="#/fixed">고정지출 보기</a>`)}
     ${kpi('목표 달성률', pct(g.rate), `${won(g.achieved)} / ${won((S.ctx.goals || {}).target)}`)}
   </div>

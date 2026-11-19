@@ -129,6 +129,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
   const cardTotal = sum(rowsM, r => r.applied);
   const mealTotal = sum(persons, p => al[p].meal);
   const variableBudget = sum(variable, v => v.budget) + mealTotal, variableActual = sum(variable, v => v.actual) + sum(persons, p => Math.min(al[p].used, al[p].meal));
+  const sharedBudget = sum(variable, v => v.budget), sharedActual = sum(variable, v => v.actual); // 공동 변동예산(개인 식대 제외)
   const prevAllow = sum(persons, p => al[p].deducted);
   const spendPlan = fixedCashTotal + fixedCardBudget + variableBudget + instBudget + prevAllow;
   const income = incomePlan + side;
@@ -165,7 +166,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
     unsettled: unsettled(ctx).length,
   };
   return { month: m, daysLeft, incomes, incomePlan, side, salaryActual, income, fixedCash, fixedCashTotal, fixedCard, fixedCardBudget, fixedCardActual, fixedCardOther, variable, variableBudget, variableActual,
-    allowance: al, persons, installment, instBudget, instNext, result, misc, etc, mealBudgets, bankMisc, bankFamily, cardTotal, spendPlan, canSave: income - spent.total - remain.total, saveRate: income ? (income - spent.total - remain.total) / income : null, planLeft: income - spendPlan,
+    allowance: al, persons, sharedBudget, sharedActual, installment, instBudget, instNext, result, misc, etc, mealBudgets, bankMisc, bankFamily, cardTotal, spendPlan, canSave: income - spent.total - remain.total, saveRate: income ? (income - spent.total - remain.total) / income : null, planLeft: income - spendPlan,
     bills, billTotal, timeline: cf.rows, cashflow: cf, split, needTotal, mainStart, mainIncome, mainEnd, balances, loanTotal, saved, repaid, events, check };
 }
 
