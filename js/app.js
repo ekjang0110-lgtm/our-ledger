@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=19';
-import { supabaseStore, demoStore } from './store.js?v=19';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=19';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=19';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=19';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=19';
+import * as C from './calc.js?v=20';
+import { supabaseStore, demoStore } from './store.js?v=20';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=20';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=20';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=20';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=20';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -45,6 +45,17 @@ const allowLeft = a => a.budget - a.used - a.advance - a.deducted;
 const sum = (xs, f) => xs.reduce((t, x) => t + (Number(f(x)) || 0), 0);
 // 용돈 쓴 내역 집계: 내용(라벨)이 같은 것끼리, 금액 큰 순
 const aggBy = rows => { const g = new Map(); rows.forEach(r => { const k = (r.label || r.merchant || '기타').replace(/\s*\(.*\)$/, ''); const o = g.get(k) || { k, n: 0, v: 0 }; o.n++; o.v += r.applied; g.set(k, o); }); return [...g.values()].sort((a, b) => b.v - a.v); };
+// 이달 진행: 날짜 경과 대비 공동 변동예산 소진율(예산이 날짜보다 빨리 줄면 경고색)
+function progressBox(s, m) {
+  const dim = new Date(Number(m.slice(0, 4)), Number(m.slice(5)), 0).getDate(), passed = dim - s.daysLeft, dRate = dim ? passed / dim : 1;
+  const bRate = s.sharedBudget ? s.sharedActual / s.sharedBudget : 0, fast = bRate > dRate + 0.05;
+  const perDay = s.daysLeft > 0 ? Math.max(0, s.result.remain.variable) / s.daysLeft : 0;
+  const bar = (r, cls) => `<span class="pg-bar"><i class="${cls}" style="width:${Math.min(100, Math.round(r * 100))}%"></i>${r > 1 ? '<em class="over"></em>' : ''}</span>`;
+  return `<div class="progbox"><div class="as-h"><span class="nolink">이달 진행</span><small>${s.daysLeft > 0 ? `남은 ${s.daysLeft}일` : '마감'}</small></div>
+    <div class="pg"><span class="pg-l">날짜</span>${bar(dRate, 'd')}<b>${passed} / ${dim}일</b></div>
+    <div class="pg"><span class="pg-l">공동 예산</span>${bar(bRate, fast ? 'b warn' : 'b')}<b class="${bRate > 1 ? 'neg' : ''}">${Math.round(bRate * 100)}%</b></div>
+    <p class="pg-note">${s.daysLeft > 0 ? (fast ? `날짜보다 예산이 빨리 줄고 있어요 · 남은 공동 변동예산 하루 ${won(perDay)}` : `날짜 속도 안쪽이에요 · 남은 공동 변동예산 하루 ${won(perDay)}`) : `공동 변동예산 ${won(s.sharedActual)} / ${won(s.sharedBudget)}`}</p></div>`;
+}
 function allowStrip(s) {
   const ps = (s.persons || []).filter(p => s.allowance[p] && s.allowance[p].budget); if (!ps.length) return '';
   return `<div class="allowstrip tap" data-act="breakdown" data-k="allow" role="button" tabindex="0"><div class="as-h"><span>용돈 (개인 몫) ›</span><small>이번 달 예산 기준 · 식대 포함</small></div>${ps.map(p => { const a = s.allowance[p], v = allowLeft(a); return `<div class="as-p">${who(p)}<span class="as-n">${esc(p)}<small>예산 ${won(a.budget)} · 사용 ${won(a.used + a.advance)}</small></span><b class="${v < 0 ? 'neg' : ''}">${v < 0 ? '▲ ' + won(-v) + ' 초과' : won(v) + ' 남음'}</b></div>`; }).join('')}</div>`;
@@ -198,12 +209,12 @@ function viewHome() {
     return `${pre}<tr class="${t.actual ? 'past' : ''}${t.actual && fold ? ' cfpast' : ''} ${t.next ? 'nextpay' : ''}"><td class="r">${t.day}일</td><td>${t.actual ? `<span class="src">실제</span>${t.category ? tag(t.category, 'cat') + ' ' : tag('! 미분류', 'warn') + ' '}` : t.estimated ? '<span class="src est">예정·승인기준</span>' : '<span class="src est">예정</span>'}${who(t.person)}${esc(t.label)}${det}</td><td class="r pos">${t.inn ? '+' + won(t.inn) : ''}</td><td class="r">${t.out ? '−' + won(t.out) : ''}</td><td class="r">${t.bal === null ? '' : `<b class="${t.bal < 0 ? 'neg' : ''}">${t.bal < 0 ? '▲ ' : ''}${won(t.bal)}</b>`}</td></tr>`; }).join('');
   const vrow = (name, sub, actual, budget, perDay) => { const left = budget - actual; return `<div class="vrow"><div class="vhead"><b>${name}</b><span><b>${won(actual)}</b> <small>/ ${won(budget)}</small></span></div>${bar(actual, budget)}<div class="vfoot"><span>${left < 0 ? tag(`▲ 초과 ${won(-left)}`, 'over') : `남음 ${won(left)}`}${sub ? ` · ${sub}` : ''}</span><span>${perDay === null || perDay === undefined ? '' : `하루 ${won(perDay)}`}</span></div></div>`; };
   return `
-  <section class="hero">
-    <div class="hero-main"><span>${mo}월 ${R.open ? '예상 ' : ''}남는 돈 <small>(카드는 쓴 달 기준)</small></span><b class="${s.canSave < 0 ? 'neg' : ''}">${s.canSave < 0 ? '▲ ' : ''}${won(s.canSave)}<small>원</small></b><em>${R.open ? `지금까지 쓴 돈만 빼면 ${won(R.leftNow)} · 남은 예산을 다 쓴다고 가정` : '이 달 확정 실적'}</em></div>
+  <section class="hero hero2">
+    <div class="hero-l"><div class="hero-main"><span>${mo}월 ${R.open ? '예상 ' : ''}남는 돈 <small>(카드는 쓴 달 기준)</small></span><b class="${s.canSave < 0 ? 'neg' : ''}">${s.canSave < 0 ? '▲ ' : ''}${won(s.canSave)}<small>원</small></b><em>${R.open ? `지금까지 쓴 돈만 빼면 ${won(R.leftNow)} · 남은 예산을 다 쓴다고 가정` : '이 달 확정 실적'}</em></div>
     <div class="flow"><div class="tap" data-act="breakdown" data-k="income" role="button" tabindex="0"><span>수입 ›</span><b>${won(s.income)}</b><small>급여 ${won(s.incomePlan)}${s.side ? ` + 부수입 ${won(s.side)}` : ''}</small></div><i>−</i>
       <div class="tap" data-act="breakdown" data-k="spent" role="button" tabindex="0"><span>쓴 돈 ›</span><b>${won(R.spent.total)}</b><small>고정 + 카드 사용 + 할부 + 통장</small></div>${R.open ? `<i>−</i><div class="tap" data-act="breakdown" data-k="remain" role="button" tabindex="0"><span>공동 남은 예산 ›</span><b>${won(R.remain.variable + R.remain.fixedCard)}</b><small>변동 ${won(R.remain.variable)} · 고정 대기 ${won(R.remain.fixedCard)}</small></div>${R.remain.meal ? `<i>−</i><div class="tap" data-act="breakdown" data-k="remain" role="button" tabindex="0"><span>용돈 식대 남음 ›</span><b>${won(R.remain.meal)}</b><small>카드로 쓸 식대 예산</small></div>` : ''}` : ''}<i>=</i>
-      <div><span>남는 돈</span><b>${won(s.canSave)}</b><small>저축·상환 여력</small></div></div>
-    ${allowStrip(s)}
+      <div><span>남는 돈</span><b>${won(s.canSave)}</b><small>저축·상환 여력</small></div></div></div>
+    <div class="hero-r">${allowStrip(s)}${progressBox(s, m)}</div>
     <div class="stack" role="img" aria-label="수입 대비 지출 구성">${parts.map(p => `<i class="sg-${p[2]}" style="flex:${p[1]}"></i>`).join('')}${s.canSave > 0 ? `<i class="sg-g" style="flex:${s.canSave}"></i>` : ''}</div>
     <div class="legend">${parts.map(p => `<span><i class="sg-${p[2]}"></i>${p[0]} <b>${won(p[1])}</b></span>`).join('')}${s.canSave > 0 ? `<span><i class="sg-g"></i>남는 돈 <b>${won(s.canSave)}</b></span>` : ''}</div>
   </section>
