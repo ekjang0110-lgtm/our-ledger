@@ -261,3 +261,4 @@ td.nowrap{white-space:nowrap}
 @media(max-width:1180px){.hero.hero2{grid-template-columns:minmax(0,1fr)}.hero2 .hero-r{display:grid;grid-template-columns:1fr 1fr}}
 @media(max-width:860px){.hero2 .hero-r{grid-template-columns:1fr}}
 @media(min-width:861px) and (max-width:1560px){.hero2 .flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.hero2 .flow>i{display:none}.hero2 .flow b{font-size:17px}}
+.ok{color:#17403a;font-weight:700}

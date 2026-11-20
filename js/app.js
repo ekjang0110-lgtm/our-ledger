@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=20';
-import { supabaseStore, demoStore } from './store.js?v=20';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=20';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=20';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=20';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=20';
+import * as C from './calc.js?v=21';
+import { supabaseStore, demoStore } from './store.js?v=21';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=21';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=21';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=21';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=21';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -394,13 +394,17 @@ async function handleCardFiles(files) {
     } catch (e) { console.error(e); lines.push(`<li class="neg">${esc(file.name)}: 읽지 못했습니다 (${esc(e.message)})</li>`); }
   }
   const adds = plan.filter(p => p.type === 'add'), upds = plan.filter(p => p.type === 'upd');
-  box.innerHTML = `<ul class="plain">${lines.join('')}</ul>${plan.length ? `<button class="btn" id="uploadCommit">새 건 ${adds.length}건 추가 · ${upds.length}건 갱신 저장</button>` : '<p class="muted">새로 반영할 내용이 없습니다.</p>'}`;
-  const btn = document.querySelector('#uploadCommit'); if (btn) btn.onclick = () => run(async () => {
+  // 여러 파일을 고르면 확인 버튼 없이 한 번에 저장(중복은 승인번호로 걸러짐)
+  const summary = `<ul class="plain">${lines.join('')}</ul>`;
+  if (!plan.length) { box.innerHTML = summary + '<p class="muted">새로 반영할 내용이 없습니다(이미 올라간 내역).</p>'; return; }
+  box.innerHTML = summary + `<p class="muted">저장하는 중… 새 건 ${adds.length}건 · 갱신 ${upds.length}건</p>`;
+  await run(async () => {
     if (adds.length) S.data.card_tx.push(...await S.store.insertCards(adds.map(a => a.row)));
     for (const u of upds) { const row = await S.store.updateCard(u.id, u.patch); Object.assign(S.data.card_tx.find(x => x.id === u.id), row); }
     const months = [...new Set(adds.map(a => a.row.used_date.slice(0, 7)))].sort(); if (months.length && !months.includes(S.month)) S.month = months[months.length - 1];
     rebuild(); render();
-  }, `카드 내역 ${adds.length}건 추가, ${upds.length}건 갱신했습니다.`);
+    const nb = document.querySelector('#uploadResult'); if (nb) { nb.innerHTML = summary + `<p class="ok">✔ 저장 완료 · 새 건 ${adds.length}건 추가 · ${upds.length}건 갱신</p>`; nb.scrollIntoView({ block: 'nearest' }); }
+  }, `카드 파일 ${files.length}개 · 새 건 ${adds.length}건 추가, ${upds.length}건 갱신했습니다.`);
 }
 
 // ---------- 통장
@@ -692,7 +696,7 @@ document.addEventListener('input', e => { const t = e.target; if (t.classList &&
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.classList.contains('stfix')) { const r = S.ctx.rows.find(x => x.id === Number(t.dataset.id)); if (r) { const st = stageOf(r); st.label = t.value; st.auto = false; } return; }
-  if (t.id === 'cardfiles' && t.files.length) handleCardFiles([...t.files]);
+  if (t.id === 'cardfiles' && t.files.length) { const fs = [...t.files]; t.value = ''; handleCardFiles(fs); }
   if (t.id === 'bankfile' && t.files.length) { const f = t.files[0]; t.value = ''; handleBankFile(f); }
   if (t.id === 'seedfile' && t.files.length) importSeed(t.files[0]);
   if (t.classList.contains('billin')) { const v = t.value.trim() === '' ? null : toNum(t.value); run(async () => { const row = await S.store.setBill(S.month, t.dataset.card, v, ''); S.data.card_bills = S.data.card_bills.filter(b => !(b.bill_month === S.month && b.card === t.dataset.card)).concat(row); rebuild(); render(); }, '청구액을 저장했습니다.'); }
