@@ -16,7 +16,7 @@ const apr = v => norm(v).split('.')[0].replace(/^0+(?=.)/, '');
 function rowOf(iss, get) {
   if (iss === 'lotte') {
     const d = pdate(get('이용일자')); if (!d) return null;
-    const raw = toInt(get('이용금액')), canc = norm(get('취소여부')).toUpperCase() === 'Y', camt = toInt(get('취소금액')); const amt = raw - (canc ? camt : 0);
+    const raw = toInt(get('이용금액')), canc = norm(get('취소여부')).toUpperCase() === 'Y', camt = Math.abs(toInt(get('취소금액'))); const amt = Math.max(0, raw - (canc ? (camt || raw) : 0)); // 롯데 파일은 취소금액이 음수(−)로 나옴
     return { used_date: d, used_time: ptime(get('이용시간')), merchant: String(get('이용가맹점') ?? '').trim(), raw_amount: raw, amount: amt, canceled: canc && amt === 0, inst_months: norm(get('이용구분')) === '일시불' ? 0 : toInt(get('할부개월')),
       status: (canc ? '취소' : '') + (norm(get('매입여부')).toUpperCase() === 'Y' ? '매입' : ''), approval_no: apr(get('승인번호')), pay_due: null, issuer_discount: 0, onnuri: Math.min(toInt(get('온누리상품권사용금액')), Math.max(0, amt)), raw: { 포인트사용: toInt(get('포인트사용')), 업종: String(get('업종') ?? ''), 이용카드: String(get('이용카드') ?? ''), 이용구분: String(get('이용구분') ?? '') } };
   }
