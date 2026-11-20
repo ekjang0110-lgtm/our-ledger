@@ -260,7 +260,7 @@ export function applyRules(master, cardName, merchant) {
 // 미분류 건의 1차 자동 분류 제안: ① 자동분류 규칙 ② 같은 가맹점의 지난 분류(2건 이상, 80% 이상 같을 때)
 export function suggest(ctx, row) {
   const rule = applyRules(ctx.master, row.card, row.merchant);
-  if (rule) return { category: rule.category || '', fixed: !!rule.fixed, label: rule.label || '', why: '규칙' };
+  if (rule) return { category: rule.category || '', fixed: !!rule.fixed, label: rule.label || '', settle: !!rule.settle, memo: rule.memo || '', why: '규칙' };
   // 이전 달까지의 같은 가맹점 건만 본다. 분류 없이 둔 건(기타)도 한 표로 세어, 쿠팡처럼 용도가 섞이는 곳은 제안하지 않는다.
   const e = {}; let tot = 0; const k = sq(row.merchant), mon = row.used_date.slice(0, 7); if (!k) return null;
   for (const r of ctx.rows) { if (r.useMonth >= mon || r.resale || num(r.amount) <= 0 || sq(r.merchant) !== k) continue; const sig = JSON.stringify([r.category || '', !!r.fixed, r.fixed ? (r.label || '') : '']); e[sig] = (e[sig] || 0) + 1; tot++; }

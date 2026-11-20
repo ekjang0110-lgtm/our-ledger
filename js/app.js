@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=23';
-import { supabaseStore, demoStore } from './store.js?v=23';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=23';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=23';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=23';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=23';
+import * as C from './calc.js?v=24';
+import { supabaseStore, demoStore } from './store.js?v=24';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=24';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=24';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=24';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=24';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -284,8 +284,14 @@ function cardRows() {
   return rs.sort((a, b) => (b.used_date + b.used_time).localeCompare(a.used_date + a.used_time) || b.id - a.id);
 }
 // 미분류 건의 선택 상태(저장 전). 처음 볼 때 자동분류 제안을 미리 선택해 둔다.
+// 단계 선택값 → 저장할 값. 규칙이 '정산 대상'이면 전액 정산·메모·이름까지 같이 넣는다(한 번 고르면 해제)
+function stagePatch(r, st) {
+  const p = { category: st.category || '', fixed: !!st.fixed, label: st.fixed && st.label ? st.label : (st.settle && st.label ? st.label : (r.label || '')), memo: st.memo !== undefined ? st.memo.trim() : (r.memo || (st.settle ? st.ruleMemo || '' : '')) };
+  if (st.settle && st.auto && !(r.settle > 0)) { p.settle = r.amount; p.settle_done = false; }
+  return p;
+}
 function stageOf(r) {
-  if (!S.stage[r.id]) { const sug = C.suggest(S.ctx, r); S.stage[r.id] = sug ? { category: sug.category, fixed: sug.fixed, label: sug.label, why: sug.why, auto: true } : { category: '', fixed: false, label: '', auto: false }; }
+  if (!S.stage[r.id]) { const sug = C.suggest(S.ctx, r); S.stage[r.id] = sug ? { category: sug.category, fixed: sug.fixed, label: sug.label, why: sug.why, auto: true, settle: !!sug.settle, ruleMemo: sug.memo || '' } : { category: '', fixed: false, label: '', auto: false }; }
   return S.stage[r.id];
 }
 const stagePending = (r, st) => !!(st.category || st.fixed || (st.memo !== undefined && st.memo !== (r.memo || '')));
@@ -311,7 +317,7 @@ function viewCards() {
   const chip = (k, v, label, n) => `<button class="chip ${f[k] === v ? 'on' : ''}" data-act="cardFilter" data-k="${k}" data-v="${esc(v)}">${esc(label)} <small>${n}</small></button>`;
   const inCard = all.filter(r => !f.card || r.card === f.card), inKind = all.filter(r => kindMatch(r, f.kind)); const nK = k => inCard.filter(r => kindMatch(r, k)).length;
   const unAll = all.filter(r => r.unclassified).length;
-  const stage = r => { const st = stageOf(r); const sug = st.auto && (st.category || st.fixed); return `<div class="stage ${sug ? 'sug' : ''}" data-act="noop"><div class="pick">${sug ? `<span class="autob" title="${st.why === '규칙' ? '자동분류 규칙에 맞음' : '같은 가맹점의 지난 분류를 따름'}">자동 제안</span>` : ''}${cats.map(c => `<button class="pk ${st.category === c ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="${esc(c)}">${st.category === c ? '✔ ' : ''}${esc(c)}</button>`).join('')}<button class="pk fx ${st.fixed ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="__fixed">${st.fixed ? '✔ ' : ''}고정</button>
+  const stage = r => { const st = stageOf(r); const sug = st.auto && (st.category || st.fixed); return `<div class="stage ${sug ? 'sug' : ''}" data-act="noop"><div class="pick">${sug ? `<span class="autob" title="${st.why === '규칙' ? '자동분류 규칙에 맞음' : '같은 가맹점의 지난 분류를 따름'}">자동 제안${st.settle ? ' · 정산 대상' + (st.ruleMemo ? ` (${esc(st.ruleMemo)})` : '') : ''}</span>` : ''}${cats.map(c => `<button class="pk ${st.category === c ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="${esc(c)}">${st.category === c ? '✔ ' : ''}${esc(c)}</button>`).join('')}<button class="pk fx ${st.fixed ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="__fixed">${st.fixed ? '✔ ' : ''}고정</button>
       ${st.fixed ? `<select class="stfix" data-id="${r.id}" aria-label="고정 항목">${options(fixedNames.includes(st.label) || !st.label ? fixedNames : [st.label, ...fixedNames], st.label, '고정 항목 선택')}</select>` : ''}</div>
       <input class="stmemo" data-id="${r.id}" placeholder="메모" maxlength="200" autocomplete="off" value="${esc(st.memo !== undefined ? st.memo : (r.memo || ''))}"></div>`; };
   return `<section class="card"><div class="row gap wrap"><label class="btn">카드사 파일 올리기<input type="file" id="cardfiles" accept=".xls,.xlsx,.html" multiple hidden></label><button class="btn ghost" data-act="cardNew">직접 추가</button><a class="link" href="#/more/master">자동분류 규칙</a></div>
@@ -387,7 +393,7 @@ async function handleCardFiles(files) {
       for (const t of rows) {
         const row = { ...t, card: card.name, person: card.person }; const k = cardKey(row); const old = existing.get(k);
         if (old) { const ch = ['raw_amount', 'amount', 'canceled', 'inst_months', 'status', 'pay_due', 'issuer_discount', 'onnuri'].filter(c => c === 'onnuri' ? (row.onnuri !== undefined && C.num(old.onnuri) !== C.num(row.onnuri)) : (String(old[c] ?? '') !== String(row[c] ?? '') && !(c === 'pay_due' && !row[c]))); if (ch.length && old.id) { plan.push({ type: 'upd', id: old.id, patch: Object.fromEntries(ch.map(c => [c, row[c]])) }); upd++; } else same++; }
-        else { const rule = C.applyRules(ms, card.name, row.merchant); const n = { ...row, category: rule ? (rule.category || '') : '', fixed: rule ? !!rule.fixed : false, label: rule ? (rule.label || '') : '', adjustment: 0, prepaid: 0, memo: '', source: 'upload' }; plan.push({ type: 'add', row: n }); existing.set(k, n); add++; }
+        else { const rule = C.applyRules(ms, card.name, row.merchant); const n = { ...row, category: rule ? (rule.category || '') : '', fixed: rule ? !!rule.fixed : false, label: rule ? (rule.label || '') : '', adjustment: 0, prepaid: 0, memo: rule && rule.settle ? (rule.memo || '') : '', source: 'upload', ...(rule && rule.settle && row.amount > 0 ? { settle: row.amount, settle_done: false } : {}) }; plan.push({ type: 'add', row: n }); existing.set(k, n); add++; }
       }
       const ds = rows.map(r => r.used_date).sort();
       lines.push(`<li><b>${esc(card.name)}</b> ${esc(file.name)} — ${rows.length}건 (${ds[0] || ''}~${ds[ds.length - 1] || ''}): 새 건 ${add} · 상태 변경 ${upd} · 중복 ${same}</li>`);
@@ -583,7 +589,7 @@ function viewMaster() {
     ['incomes', '수입', [{ k: 'name', label: '항목' }, { k: 'person', label: '사람', t: 'select', opts: who }, { k: 'day', label: '입금일', t: 'num', w: 44 }, { k: 'amount', label: '금액', t: 'money' }, { k: 'account', label: '입금계좌', t: 'select', opts: acct }, { k: 'early', label: '전월 말 선지급', t: 'bool' }]],
     ['fixed_cash', '고정지출 (현금·이체)', [{ k: 'name', label: '항목' }, { k: 'person', label: '사람', t: 'select', opts: who }, { k: 'account', label: '출금계좌', t: 'select', opts: acct }, { k: 'day', label: '출금일', t: 'num', w: 44 }, { k: 'amount', label: '월 금액', t: 'money' }, { k: 'allowance', label: '용돈 차감', t: 'bool' }, { k: 'note', label: '비고' }], '"용돈 차감"에 체크한 항목은 전월 카드 용돈·가불만큼 이체액이 줄어듭니다. 기본 용돈을 넘겨 쓴 금액은 이월하지 않습니다.'],
     ['fixed_card', '고정지출 (카드)', [{ k: 'name', label: '항목' }, { k: 'person', label: '사람', t: 'select', opts: who }, { k: 'card', label: '카드', t: 'select', opts: cardsN, blank: '-' }, { k: 'due', label: '결제일(참고)' }, { k: 'budget', label: '월 예산', t: 'money' }, { k: 'note', label: '비고' }], '항목명이 카드 내역의 "내용"과 같아야 홈 화면에서 승인 여부가 맞춰집니다.'],
-    ['rules', '자동분류 규칙', [{ k: 'keyword', label: '가맹점 키워드' }, { k: 'card', label: '적용 카드', t: 'select', opts: cardsN, blank: '전체' }, { k: 'category', label: '카테고리', t: 'select', opts: () => master().card_categories || [], blank: '-' }, { k: 'fixed', label: '고정', t: 'bool' }, { k: 'label', label: '내용(항목명)' }], '위에서부터 먼저 맞는 규칙을 적용합니다(띄어쓰기는 무시). 카드 파일을 올릴 때 새 건에 적용되고, 미분류 건에는 카드 화면에서 미리 선택된 상태로 제안됩니다.'],
+    ['rules', '자동분류 규칙', [{ k: 'keyword', label: '가맹점 키워드' }, { k: 'card', label: '적용 카드', t: 'select', opts: cardsN, blank: '전체' }, { k: 'category', label: '카테고리', t: 'select', opts: () => master().card_categories || [], blank: '-' }, { k: 'fixed', label: '고정', t: 'bool' }, { k: 'label', label: '내용(항목명)' }, { k: 'settle', label: '정산 대상', t: 'bool' }, { k: 'memo', label: '정산 메모' }], '위에서부터 먼저 맞는 규칙을 적용합니다(띄어쓰기는 무시). 카드 파일을 올릴 때 새 건에 적용되고, 미분류 건에는 카드 화면에서 미리 선택된 상태로 제안됩니다. "정산 대상"을 켜면 전액을 정산(돌려받을 돈)으로 걸어 공동 예산에서 뺍니다.'],
   ];
   defs.forEach(([key, , cols]) => { LISTS['m_' + key] = { cols, get: () => master()[key] || [], save: rows => saveDoc('master', { ...master(), [key]: rows }) }; });
   return `<div class="chips scroll">${defs.map(d => `<a class="chip" href="javascript:void 0" data-act="jump" data-to="sec_${d[0]}">${d[1]}</a>`).join('')}</div>
@@ -646,7 +652,7 @@ const ACT = {
   bulkPick(el) { S.bulkCat = S.bulkCat === el.dataset.cat ? '' : el.dataset.cat; keepScroll(); },
   bulkApply() { const c = S.bulkCat;
     const jobs = c ? [...S.sel].map(id => [id, c === '__fixed' ? { fixed: true } : c === '__none' ? { category: '', fixed: false } : { category: c, fixed: false }])
-      : bulkOwn().map(r => { const st = S.stage[r.id]; return [r.id, { category: st.category || '', fixed: !!st.fixed, label: st.fixed && st.label ? st.label : (r.label || ''), memo: st.memo !== undefined ? st.memo.trim() : (r.memo || '') }]; });
+      : bulkOwn().map(r => [r.id, stagePatch(r, S.stage[r.id])]);
     if (!jobs.length) return;
     run(async () => { for (const [id, patch] of jobs) { Object.assign(S.data.card_tx.find(x => x.id === id), await S.store.updateCard(id, patch)); delete S.stage[id]; S.sel.delete(id); } if (c) S.sel.clear(); S.bulkCat = ''; rebuild(); keepScroll(); }, `${jobs.length}건을 반영했습니다.`); },
   cardEdit(el) { cardModal(S.ctx.rows.find(r => r.id === Number(el.dataset.id))); },
@@ -658,7 +664,7 @@ const ACT = {
     const y = window.scrollY; render(); window.scrollTo(0, y); },
   stageClear() { S.ctx.rows.filter(r => r.useMonth === S.month && r.unclassified).forEach(r => { S.stage[r.id] = { category: '', fixed: false, label: '', auto: false }; }); render(); },
   stageApply() { const list = stageList(); if (!list.length) return; const miss = list.filter(x => x.st.fixed && !x.st.label && !x.r.label); if (miss.length && !confirm(`고정 항목을 고르지 않은 건이 ${miss.length}건 있습니다. 그대로 반영할까요?`)) return;
-    run(async () => { for (const { r, st } of list) { const patch = { category: st.category || '', fixed: !!st.fixed, label: st.fixed && st.label ? st.label : (r.label || ''), memo: st.memo !== undefined ? st.memo.trim() : (r.memo || '') }; Object.assign(S.data.card_tx.find(x => x.id === r.id), await S.store.updateCard(r.id, patch)); delete S.stage[r.id]; } rebuild(); render(); }, `${list.length}건을 반영했습니다.`); },
+    run(async () => { for (const { r, st } of list) { const patch = stagePatch(r, st); Object.assign(S.data.card_tx.find(x => x.id === r.id), await S.store.updateCard(r.id, patch)); delete S.stage[r.id]; } rebuild(); render(); }, `${list.length}건을 반영했습니다.`); },
   settleDone(el) { const r = S.ctx.rows.find(x => x.id === Number(el.dataset.id));
     openModal(`<h2>정산 받음</h2><div class="rawinfo"><b>${who(r.person)}${esc(r.label || r.merchant)}</b><span>${r.used_date} · ${esc(r.card)}</span><span>받을 금액 <b>${won(r.settle)}원</b></span></div><p class="muted small">개인통장으로 받은 돈을 모임통장으로 옮겼다면 입금 기록까지 함께 남기세요. "정산입금"은 수입에 잡히지 않습니다.</p><div class="actions"><button class="btn ghost" data-act="modalClose">닫기</button><button class="btn ghost" data-act="settleMark" data-id="${r.id}" data-bank="0">받음만 표시</button><button class="btn" data-act="settleMark" data-id="${r.id}" data-bank="1">받음 + 모임통장 입금 기록</button></div>`); },
   settleMark(el) { const id = Number(el.dataset.id); const r = S.ctx.rows.find(x => x.id === id);
