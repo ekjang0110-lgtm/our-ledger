@@ -260,8 +260,14 @@ td.nowrap{white-space:nowrap}
 .pg-note{margin:0;font-size:11.5px;opacity:.75;line-height:1.4}
 @media(max-width:1180px){.hero.hero2{grid-template-columns:minmax(0,1fr)}.hero2 .hero-r{display:grid;grid-template-columns:1fr 1fr}}
 @media(max-width:860px){.hero2 .hero-r{grid-template-columns:1fr}}
-@media(min-width:861px) and (max-width:1560px){.hero2 .flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.hero2 .flow>i{display:none}.hero2 .flow b{font-size:17px}}
+@media(min-width:861px) and (max-width:1560px){.hero2 .flow.n5{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.hero2 .flow.n5>i{display:none}.hero2 .flow b{font-size:17px}.hero2 .flow.n4{gap:6px}.hero2 .flow.n4>div{padding:10px}}
 .ok{color:#17403a;font-weight:700}
 .listhead{display:flex;align-items:center;gap:10px}.listhead>span{flex:1}
 .listhead .allck{flex:none}.ck.some{background:#e3f0ea;color:#17403a;font-weight:800}
 .listhead .selc{color:#17403a}
+/* v2.16 홈 상단 여백 정리: 왼쪽 = 남는 돈 → 계산식 → 구성 막대 순으로 촘촘히 */
+.hero2 .hero-l{justify-content:flex-start;gap:14px}
+.hero2 .hero-bar{display:flex;flex-direction:column;gap:8px;margin-top:auto}
+.hero2 .hero-bar .stack{margin-top:0}
+.hero2 .flow small{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}
+@media(max-width:1180px){.hero2 .hero-bar{margin-top:0}}

@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=24';
-import { supabaseStore, demoStore } from './store.js?v=24';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=24';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=24';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=24';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=24';
+import * as C from './calc.js?v=26';
+import { supabaseStore, demoStore } from './store.js?v=26';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=26';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=26';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=26';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=26';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -211,12 +211,12 @@ function viewHome() {
   return `
   <section class="hero hero2">
     <div class="hero-l"><div class="hero-main"><span>${mo}월 ${R.open ? '예상 ' : ''}남는 돈 <small>(카드는 쓴 달 기준)</small></span><b class="${s.canSave < 0 ? 'neg' : ''}">${s.canSave < 0 ? '▲ ' : ''}${won(s.canSave)}<small>원</small></b><em>${R.open ? `지금까지 쓴 돈만 빼면 ${won(R.leftNow)} · 남은 예산을 다 쓴다고 가정` : '이 달 확정 실적'}</em></div>
-    <div class="flow"><div class="tap" data-act="breakdown" data-k="income" role="button" tabindex="0"><span>수입 ›</span><b>${won(s.income)}</b><small>급여 ${won(s.incomePlan)}${s.side ? ` + 부수입 ${won(s.side)}` : ''}</small></div><i>−</i>
+    <div class="flow ${R.remain.meal ? 'n5' : 'n4'}"><div class="tap" data-act="breakdown" data-k="income" role="button" tabindex="0"><span>수입 ›</span><b>${won(s.income)}</b><small>급여 ${won(s.incomePlan)}${s.side ? ` + 부수입 ${won(s.side)}` : ''}</small></div><i>−</i>
       <div class="tap" data-act="breakdown" data-k="spent" role="button" tabindex="0"><span>쓴 돈 ›</span><b>${won(R.spent.total)}</b><small>고정 + 카드 사용 + 할부 + 통장</small></div>${R.open ? `<i>−</i><div class="tap" data-act="breakdown" data-k="remain" role="button" tabindex="0"><span>공동 남은 예산 ›</span><b>${won(R.remain.variable + R.remain.fixedCard)}</b><small>변동 ${won(R.remain.variable)} · 고정 대기 ${won(R.remain.fixedCard)}</small></div>${R.remain.meal ? `<i>−</i><div class="tap" data-act="breakdown" data-k="remain" role="button" tabindex="0"><span>용돈 식대 남음 ›</span><b>${won(R.remain.meal)}</b><small>카드로 쓸 식대 예산</small></div>` : ''}` : ''}<i>=</i>
-      <div><span>남는 돈</span><b>${won(s.canSave)}</b><small>저축·상환 여력</small></div></div></div>
+      <div><span>남는 돈</span><b>${won(s.canSave)}</b><small>저축·상환 여력</small></div></div>
+    <div class="hero-bar"><div class="stack" role="img" aria-label="수입 대비 지출 구성">${parts.map(p => `<i class="sg-${p[2]}" style="flex:${p[1]}"></i>`).join('')}${s.canSave > 0 ? `<i class="sg-g" style="flex:${s.canSave}"></i>` : ''}</div>
+    <div class="legend">${parts.map(p => `<span><i class="sg-${p[2]}"></i>${p[0]} <b>${won(p[1])}</b></span>`).join('')}${s.canSave > 0 ? `<span><i class="sg-g"></i>남는 돈 <b>${won(s.canSave)}</b></span>` : ''}</div></div></div>
     <div class="hero-r">${allowStrip(s)}${progressBox(s, m)}</div>
-    <div class="stack" role="img" aria-label="수입 대비 지출 구성">${parts.map(p => `<i class="sg-${p[2]}" style="flex:${p[1]}"></i>`).join('')}${s.canSave > 0 ? `<i class="sg-g" style="flex:${s.canSave}"></i>` : ''}</div>
-    <div class="legend">${parts.map(p => `<span><i class="sg-${p[2]}"></i>${p[0]} <b>${won(p[1])}</b></span>`).join('')}${s.canSave > 0 ? `<span><i class="sg-g"></i>남는 돈 <b>${won(s.canSave)}</b></span>` : ''}</div>
   </section>
   <div class="kpis four">
     ${kpi('모임통장 예상 월말', cf.end === null ? '-' : won(cf.end), cf.nextSalary ? `다음 달 월급 ${won(cf.nextSalary)} 포함 · 빼면 <b>${won(cf.end - cf.nextSalary)}</b>` : !cf.tracked ? '기초잔액 기준일 이전 달' : `월초 ${won(cf.start)} · 월중 최저 ${won(cf.low)}`, cf.end < 0 || cf.low < 0 ? 'neg' : '')}
@@ -315,7 +315,7 @@ function applyBar() {
 function viewCards() {
   const ms = master(); const all = S.ctx.rows.filter(r => r.useMonth === S.month); const rs = cardRows(); const f = S.cardFilter; const cats = ms.card_categories || []; const fixedNames = (ms.fixed_card || []).map(x => x.name);
   const chip = (k, v, label, n) => `<button class="chip ${f[k] === v ? 'on' : ''}" data-act="cardFilter" data-k="${k}" data-v="${esc(v)}">${esc(label)} <small>${n}</small></button>`;
-  const inCard = all.filter(r => !f.card || r.card === f.card), inKind = all.filter(r => kindMatch(r, f.kind)); const nK = k => inCard.filter(r => kindMatch(r, k)).length;
+  const inCard = all.filter(r => !f.card || r.card === f.card), inKind = all.filter(r => kindMatch(r, f.kind)); const nK = k => { const t = all.filter(r => kindMatch(r, k)).length; if (!f.card) return t; const c = inCard.filter(r => kindMatch(r, k)).length; return c === t ? t : `${c}/${t}`; };
   const unAll = all.filter(r => r.unclassified).length;
   const stage = r => { const st = stageOf(r); const sug = st.auto && (st.category || st.fixed); return `<div class="stage ${sug ? 'sug' : ''}" data-act="noop"><div class="pick">${sug ? `<span class="autob" title="${st.why === '규칙' ? '자동분류 규칙에 맞음' : '같은 가맹점의 지난 분류를 따름'}">자동 제안${st.settle ? ' · 정산 대상' + (st.ruleMemo ? ` (${esc(st.ruleMemo)})` : '') : ''}</span>` : ''}${cats.map(c => `<button class="pk ${st.category === c ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="${esc(c)}">${st.category === c ? '✔ ' : ''}${esc(c)}</button>`).join('')}<button class="pk fx ${st.fixed ? 'on' : ''}" data-act="stagePick" data-id="${r.id}" data-cat="__fixed">${st.fixed ? '✔ ' : ''}고정</button>
       ${st.fixed ? `<select class="stfix" data-id="${r.id}" aria-label="고정 항목">${options(fixedNames.includes(st.label) || !st.label ? fixedNames : [st.label, ...fixedNames], st.label, '고정 항목 선택')}</select>` : ''}</div>
@@ -490,7 +490,7 @@ function viewBills() {
   ${sec('청구월별 대시보드', `<div class="tablewrap"><table class="tbl board"><thead><tr><th>청구월</th>${cards.map(c => `<th class="r">${who(c.person)}${esc(c.name.replace(/^(은경|영민)\s/, ''))}</th>`).join('')}<th class="r">일시불</th><th class="r">할부</th><th class="r">승인기준</th><th class="mixh">구성</th><th class="r">실제 청구</th></tr></thead><tbody>
     ${board.map(b => `<tr class="${b.month === m ? 'cur' : ''}"><td><a href="#/bills" data-act="gotoMonth" data-m="${b.month}">${b.month}</a>${b.month === cur ? ' ' + tag('이번 달', 'wait') : b.month > cur ? ' ' + tag('예정', 'wait') : ''}</td>${b.bills.map(x => `<td class="r">${x.expected ? won(x.expected) : '<span class="muted">-</span>'}</td>`).join('')}<td class="r">${won(b.lump)}</td><td class="r">${won(b.installment)}</td><td class="r"><b>${won(b.expected)}</b></td>
       <td><div class="mix" role="img" aria-label="일시불 ${won(b.lump)} 할부 ${won(b.installment)}"><i class="lump" style="width:${Math.round(Math.max(0, b.lump) / max * 100)}%"></i><i class="inst" style="width:${Math.round(b.installment / max * 100)}%"></i></div></td>
-      <td class="r">${b.actual === null ? tag('대기', 'wait') : won(b.actual) + (b.entered < b.cards ? ` <small class="muted">(${b.entered}/${b.cards})</small>` : '')}</td></tr>`).join('')}</tbody></table></div>
+      <td class="r">${b.actual === null ? (b.month > cur ? '<span class="muted">-</span>' : tag('미입력', 'wait')) : won(b.actual) + (b.entered < b.cards ? ` <small class="muted">(${b.entered}/${b.cards})</small>` : '')}</td></tr>`).join('')}</tbody></table></div>
     <div class="legend sm"><span><i class="lump"></i>일시불 (진한 색)</span><span><i class="inst"></i>할부 (빗금)</span><span class="muted">청구월을 누르면 화면 위쪽 월이 그 달로 바뀌어, 그 달의 청구 상세(위 표)를 볼 수 있습니다. 앞으로의 달은 지금까지 승인된 건 기준입니다.</span></div>`)}
   <div>${sec('일시불 계산', `<table class="tbl"><thead><tr><th>카드</th><th class="r">일시불 승인</th><th class="r">선결제</th><th class="r">일시불 청구</th></tr></thead><tbody>${s.bills.map(b => `<tr><td>${who(b.person)}${esc(b.card)}</td><td class="r">${won(b.lump)}</td><td class="r">${b.prepaid ? '−' + won(b.prepaid) : ''}</td><td class="r"><b>${won(b.lumpNet)}</b></td></tr>`).join('')}</tbody></table><p class="muted small">${monthLabel(C.addMonth(m, -1))} 사용분입니다(국민카드는 결제예정일 기준).</p>`)}</div>`;
 }
