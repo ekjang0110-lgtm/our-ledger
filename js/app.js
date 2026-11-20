@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=21';
-import { supabaseStore, demoStore } from './store.js?v=21';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=21';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=21';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=21';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=21';
+import * as C from './calc.js?v=22';
+import { supabaseStore, demoStore } from './store.js?v=22';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=22';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=22';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=22';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=22';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -318,7 +318,7 @@ function viewCards() {
     <p class="muted small">카드사에서 받은 이용내역 파일을 그대로 올리세요(여러 개 가능). 카드를 자동 인식하고 새 건만 추가하며, 취소·매입 상태는 갱신합니다.</p><div id="uploadResult"></div></section>
   <div class="filters"><div class="chips scroll">${chip('kind', '', '전체', nK(''))}${chip('kind', 'un', '미분류', nK('un'))}${chip('kind', 'fixed', '고정', nK('fixed'))}${cats.map(c => chip('kind', c, c, nK(c))).join('')}${chip('kind', 'inst', '할부', nK('inst'))}${chip('kind', 'settle', '정산', nK('settle'))}${chip('kind', 'onnuri', '온누리', nK('onnuri'))}</div>
   <div class="chips scroll">${chip('card', '', '전체 카드', inKind.length)}${(ms.cards || []).map(c => chip('card', c.name, c.name, inKind.filter(r => r.card === c.name).length)).join('')}</div></div>
-  <section class="card flush"><div class="listhead"><span>${rs.length}건</span><b>반영액 ${won(rs.reduce((a, r) => a + r.applied, 0))}원</b></div>
+  <section class="card flush"><div class="listhead">${(() => { const sel = rs.filter(r => !r.spreadPart), on = sel.length && sel.every(r => S.sel.has(r.id)), some = !on && sel.some(r => S.sel.has(r.id)); return `<button class="ck allck ${on ? 'on' : some ? 'some' : ''}" data-act="selAll" role="checkbox" aria-checked="${on ? 'true' : some ? 'mixed' : 'false'}" aria-label="보이는 ${sel.length}건 전체 선택" title="보이는 ${sel.length}건 전체 선택">${on ? '✔' : some ? '−' : ''}</button>`; })()}<span>${rs.length}건${S.sel.size ? ` · <b class="selc">${S.sel.size}건 선택</b>` : ''}</span><b>반영액 ${won(rs.reduce((a, r) => a + r.applied, 0))}원</b></div>
   ${rs.length ? rs.map(r => `<div class="item ${r.canceled ? 'cancel' : ''}${fl('un', r.unclassified)}${fl('settle', r.settle > 0 && !r.settle_done)}${fl('inst', r.K > 1 && r.amount > 0)}" data-act="cardEdit" data-id="${r.id}"${r.spreadPart ? '' : ` data-sel="${S.sel.has(r.id) ? 1 : 0}"`}>
     <div class="i1">${r.spreadPart ? '<span class="ck ghostck" aria-hidden="true">↻</span>' : `<button class="ck ${S.sel.has(r.id) ? 'on' : ''}" data-act="selToggle" data-id="${r.id}" role="checkbox" aria-checked="${S.sel.has(r.id)}" aria-label="선택">${S.sel.has(r.id) ? '✔' : ''}</button>`}<span class="d dt">${r.used_date.slice(5).replace('-', '/')}${r.used_time ? ` <small>${esc(String(r.used_time).slice(0, 5))}</small>` : ''}</span>${who(r.person)}<span class="m">${esc(r.label || r.merchant)}</span><b class="a">${won(r.applied)}</b></div>
     <div class="i2"><span>${esc(r.card)}${r.label ? ' · ' + esc(r.merchant) : ''}${r.K > 1 ? ` · ${r.K}개월 할부${r.auto ? ` (총 ${won(r.amount)})` : ''}` : ''}${r.spread ? (r.spreadPart ? ` · ${Number(r.used_date.slice(5, 7))}월 결제 ${won(r.spreadFirst + r.spreadLater * (r.spread - 1))} 나눠 반영 ${r.spreadPart}/${r.spread}회` : ` · 일시불 ${won(r.amount)} → 예산 ${r.spread}개월 나눠 반영 1/${r.spread}회`) : ''}${r.canceled ? ' · 취소' : ''}${r.adjustment ? ` · 조정 ${signed(r.adjustment)}` : ''}${r.prepaid ? ` · 선결제 ${won(r.prepaid)}` : ''}${r.settle ? ` · 정산 −${won(r.settle)}(${r.settle_done ? '받음' : '미수'})` : ''}${r.onnuri ? ` · 온누리 ${won(r.onnuri)}` : ''}${r.memo && !r.unclassified ? ' · ' + esc(r.memo) : ''}</span>
@@ -641,7 +641,7 @@ const ACT = {
   cardFilter(el) { S.cardFilter[el.dataset.k] = el.dataset.v; S.sel.clear(); render(); },
   instOk(el) { const id = Number(el.dataset.id); run(async () => { const row = await S.store.updateCard(id, { inst_checked: true }); Object.assign(S.data.card_tx.find(x => x.id === id), row); rebuild(); keepScroll(); }, '할부 확인했습니다.'); },
   selToggle(el) { const id = Number(el.dataset.id); S.sel.has(id) ? S.sel.delete(id) : S.sel.add(id); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
-  selAll() { const rs = cardRows(); const all = rs.every(r => S.sel.has(r.id)); rs.forEach(r => all ? S.sel.delete(r.id) : S.sel.add(r.id)); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
+  selAll() { const rs = cardRows().filter(r => !r.spreadPart); const all = rs.length && rs.every(r => S.sel.has(r.id)); rs.forEach(r => all ? S.sel.delete(r.id) : S.sel.add(r.id)); if (!S.sel.size) S.bulkCat = ''; keepScroll(); },
   selClear() { S.sel.clear(); S.bulkCat = ''; keepScroll(); },
   bulkPick(el) { S.bulkCat = S.bulkCat === el.dataset.cat ? '' : el.dataset.cat; keepScroll(); },
   bulkApply() { const c = S.bulkCat;
