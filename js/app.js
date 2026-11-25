@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=26';
-import { supabaseStore, demoStore } from './store.js?v=26';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=26';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=26';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=26';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=26';
+import * as C from './calc.js?v=27';
+import { supabaseStore, demoStore } from './store.js?v=27';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=27';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=27';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=27';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=27';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -249,7 +249,7 @@ function viewHome() {
     ${alRow('기본 용돈 (현금 이체)', a => won(a.base))}${ms.allowance_deduct_card !== false ? alRow('− 전월 카드 용돈 중 식대 예산 초과분', a => won(Math.min(a.cardDeduct, a.base)) + `<br><small class="muted">전월 ${won(a.prevUsed)}${a.prevMeal ? ` − 식대 ${won(a.prevMeal)}` : ''}${a.prevOver ? ` · 초과 ${won(a.prevOver)}은 개인 부담` : ''}</small>`) : ''}${alRow('− 전월 가불', a => won(a.prevAdvance))}${alRow('− 이월된 가불', a => won(a.prevCarry))}
     ${alRow('<b>= 이번 달 이체액</b>', a => `<b>${won(a.transfer)}</b>`, 'sum')}${alRow('다음 달로 이월되는 가불', a => won(a.carryOver))}</tbody></table>
     <p class="muted small">카드 분류는 "용돈" 하나로 통일하고, 예산은 기본 용돈 + 식대 예산을 합쳐서 봅니다. 예산을 넘겨 쓴 금액은 표시만 하고 넘기지 않습니다(개인 부담). "용돈가불"만 다음 달 이체액에서 빼고, 다 못 갚으면 이월합니다.</p>`)}
-  ${unsettled.length ? sec(`정산 미수 ${unsettled.length}건 · ${won(unsettled.reduce((a, r) => a + r.settle, 0))}원`, `<table class="tbl"><tbody>${unsettled.map(r => `<tr><td>${who(r.person)}${esc(r.label || r.merchant)}<br><small class="muted">${r.used_date} · ${esc(r.card)}${r.memo ? ' · ' + esc(r.memo) : ''}</small></td><td class="r">${won(r.settle)}</td><td class="c"><button class="btn ghost sm" data-act="settleDone" data-id="${r.id}">받음</button></td></tr>`).join('')}</tbody></table>`) : ''}
+  ${unsettled.length ? sec(`정산 미수 ${unsettled.length}건 · ${won(unsettled.reduce((a, r) => a + r.settle, 0))}원`, `<p class="muted small">받은 돈은 모임통장(월급 통장)에 넣습니다. 받은 건을 체크하고 한 번에 "받음" 처리하세요.</p><table class="tbl settletbl"><tbody>${unsettled.map(r => `<tr><td class="c ckcell"><input type="checkbox" class="settleck" data-id="${r.id}" data-amt="${r.settle}" aria-label="선택"></td><td>${who(r.person)}${esc(r.label || r.merchant)}<br><small class="muted">${r.used_date} · ${esc(r.card)}${r.memo ? ' · ' + esc(r.memo) : ''}</small></td><td class="r">${won(r.settle)}</td><td class="c"><button class="btn ghost sm" data-act="settleDone" data-id="${r.id}">받음</button></td></tr>`).join('')}</tbody></table><div class="actions settleact"><span class="muted small" id="settleSum">선택 없음 — 누르면 ${unsettled.length}건 전체</span><button class="btn" data-act="settleBulk">묶어서 받음</button></div>`) : ''}
   ${s.events.length ? sec('이번 달 가족행사', s.events.map(e => `<div class="line"><span>${esc(e.event)} (${esc(e.target)})</span><b>${won(e.amount)}</b></div>`).join('')) : ''}
   </div></div>
   <div class="row gap end"><span class="muted small">${closed ? `마감 저장: ${closed.closed_at.slice(0, 10)}` : '아직 마감하지 않은 달입니다.'}</span><button class="btn ghost" data-act="closeMonth">${closed ? '마감 다시 저장' : '월 마감 저장'}</button></div>`;
@@ -390,13 +390,16 @@ async function handleCardFiles(files) {
       if (!issuer) { lines.push(`<li class="neg">${esc(file.name)}: 카드 이용내역을 찾지 못했습니다.</li>`); continue; }
       const card = pickCard(ms, issuer, rows); if (!card) { lines.push(`<li class="neg">${esc(file.name)}: 어느 카드인지 알 수 없습니다. 기초 데이터의 카드 목록을 확인해 주세요.</li>`); continue; }
       let add = 0, upd = 0, same = 0;
-      for (const t of rows) {
-        const row = { ...t, card: card.name, person: card.person }; const k = cardKey(row); const old = existing.get(k);
+      const mapped = rows.map(t => ({ ...t, card: card.name, person: card.person }));
+      // 국민카드: 취소 전표를 원 거래에 자동 연결(같은 주기면 원 거래 0원·차감, 마감 후면 다음 청구 환급)
+      let unlinked = 0; if (issuer === 'kb') { const ex = C.linkKbCancels(S.data.card_tx.filter(r => r.card === card.name), mapped, cardKey); ex.forEach(x => { plan.push({ type: 'upd', id: x.id, patch: x.patch }); upd++; }); unlinked = ex.unlinked.length; }
+      for (const row of mapped) {
+        const link = row._x; delete row._x; const k = cardKey(row); const old = existing.get(k);
         if (old) { const ch = ['raw_amount', 'amount', 'canceled', 'inst_months', 'status', 'pay_due', 'issuer_discount', 'onnuri'].filter(c => c === 'onnuri' ? (row.onnuri !== undefined && C.num(old.onnuri) !== C.num(row.onnuri)) : (String(old[c] ?? '') !== String(row[c] ?? '') && !(c === 'pay_due' && !row[c]))); if (ch.length && old.id) { plan.push({ type: 'upd', id: old.id, patch: Object.fromEntries(ch.map(c => [c, row[c]])) }); upd++; } else same++; }
-        else { const rule = C.applyRules(ms, card.name, row.merchant); const n = { ...row, category: rule ? (rule.category || '') : '', fixed: rule ? !!rule.fixed : false, label: rule ? (rule.label || '') : '', adjustment: 0, prepaid: 0, memo: rule && rule.settle ? (rule.memo || '') : '', source: 'upload', ...(rule && rule.settle && row.amount > 0 ? { settle: row.amount, settle_done: false } : {}) }; plan.push({ type: 'add', row: n }); existing.set(k, n); add++; }
+        else { const rule = C.applyRules(ms, card.name, row.merchant); const n = { ...row, category: rule ? (rule.category || '') : '', fixed: rule ? !!rule.fixed : false, label: rule ? (rule.label || '') : '', adjustment: 0, prepaid: 0, memo: rule && rule.settle ? (rule.memo || '') : '', source: 'upload', ...(rule && rule.settle && row.amount > 0 ? { settle: row.amount, settle_done: false } : {}), ...(link || {}) }; plan.push({ type: 'add', row: n }); existing.set(k, n); add++; }
       }
       const ds = rows.map(r => r.used_date).sort();
-      lines.push(`<li><b>${esc(card.name)}</b> ${esc(file.name)} — ${rows.length}건 (${ds[0] || ''}~${ds[ds.length - 1] || ''}): 새 건 ${add} · 상태 변경 ${upd} · 중복 ${same}</li>`);
+      lines.push(`<li><b>${esc(card.name)}</b> ${esc(file.name)} — ${rows.length}건 (${ds[0] || ''}~${ds[ds.length - 1] || ''}): 새 건 ${add} · 상태 변경 ${upd} · 중복 ${same}${unlinked ? ` · <b class="neg">취소 ${unlinked}건은 원 거래를 못 찾음(부분 취소 등) — 해당 결제 금액을 직접 고쳐 주세요</b>` : ''}</li>`);
     } catch (e) { console.error(e); lines.push(`<li class="neg">${esc(file.name)}: 읽지 못했습니다 (${esc(e.message)})</li>`); }
   }
   const adds = plan.filter(p => p.type === 'add'), upds = plan.filter(p => p.type === 'upd');
@@ -666,7 +669,11 @@ const ACT = {
   stageApply() { const list = stageList(); if (!list.length) return; const miss = list.filter(x => x.st.fixed && !x.st.label && !x.r.label); if (miss.length && !confirm(`고정 항목을 고르지 않은 건이 ${miss.length}건 있습니다. 그대로 반영할까요?`)) return;
     run(async () => { for (const { r, st } of list) { const patch = stagePatch(r, st); Object.assign(S.data.card_tx.find(x => x.id === r.id), await S.store.updateCard(r.id, patch)); delete S.stage[r.id]; } rebuild(); render(); }, `${list.length}건을 반영했습니다.`); },
   settleDone(el) { const r = S.ctx.rows.find(x => x.id === Number(el.dataset.id));
-    openModal(`<h2>정산 받음</h2><div class="rawinfo"><b>${who(r.person)}${esc(r.label || r.merchant)}</b><span>${r.used_date} · ${esc(r.card)}</span><span>받을 금액 <b>${won(r.settle)}원</b></span></div><p class="muted small">개인통장으로 받은 돈을 모임통장으로 옮겼다면 입금 기록까지 함께 남기세요. "정산입금"은 수입에 잡히지 않습니다.</p><div class="actions"><button class="btn ghost" data-act="modalClose">닫기</button><button class="btn ghost" data-act="settleMark" data-id="${r.id}" data-bank="0">받음만 표시</button><button class="btn" data-act="settleMark" data-id="${r.id}" data-bank="1">받음 + 모임통장 입금 기록</button></div>`); },
+    openModal(`<h2>정산 받음</h2><div class="rawinfo"><b>${who(r.person)}${esc(r.label || r.merchant)}</b><span>${r.used_date} · ${esc(r.card)}</span><span>받을 금액 <b>${won(r.settle)}원</b></span></div><p class="muted small">받은 돈은 모임통장에 넣습니다. 토스 거래내역을 올리면 입금이 자동으로 들어오니 보통은 "받음만 표시"를 누르세요(입금 기록까지 남기면 중복될 수 있어요). "정산입금"은 수입에 잡히지 않습니다.</p><div class="actions"><button class="btn ghost" data-act="modalClose">닫기</button><button class="btn ghost" data-act="settleMark" data-id="${r.id}" data-bank="0">받음만 표시</button><button class="btn" data-act="settleMark" data-id="${r.id}" data-bank="1">받음 + 모임통장 입금 기록</button></div>`); },
+  settleBulk() { const cks = [...document.querySelectorAll('.settleck:checked')]; const ids = (cks.length ? cks : [...document.querySelectorAll('.settleck')]).map(c => Number(c.dataset.id)); if (!ids.length) return;
+    const rows = ids.map(id => S.ctx.rows.find(x => x.id === id && !x.spreadPart)).filter(Boolean), tot = rows.reduce((a, r) => a + r.settle, 0);
+    if (!confirm(`${rows.length}건 ${won(tot)}원을 받음 처리할까요?\n(받은 돈은 모임통장에 넣어 주세요. 입금 내역은 토스 거래내역으로 들어옵니다.)`)) return;
+    run(async () => { for (const r of rows) Object.assign(S.data.card_tx.find(x => x.id === r.id), await S.store.updateCard(r.id, { settle_done: true })); rebuild(); render(); }, `정산 ${rows.length}건 ${won(tot)}원을 받음 처리했습니다.`); },
   settleMark(el) { const id = Number(el.dataset.id); const r = S.ctx.rows.find(x => x.id === id);
     run(async () => { Object.assign(S.data.card_tx.find(x => x.id === id), await S.store.updateCard(id, { settle_done: true }));
       if (el.dataset.bank === '1') S.data.bank_tx.push(...await S.store.insertBank([{ tx_date: C.todayStr(), account: '모임통장', memo: `정산 ${r.label || r.merchant}`.slice(0, 80), deposit: r.settle, withdrawal: 0, category: '정산입금', fixed: false, note: `${r.used_date} ${r.card} 결제분`, source: 'manual' }]));
@@ -702,6 +709,7 @@ document.addEventListener('input', e => { const t = e.target; if (t.classList &&
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.classList.contains('stfix')) { const r = S.ctx.rows.find(x => x.id === Number(t.dataset.id)); if (r) { const st = stageOf(r); st.label = t.value; st.auto = false; } return; }
+  if (t.classList.contains('settleck')) { const on = [...document.querySelectorAll('.settleck:checked')], el = document.querySelector('#settleSum'); if (el) el.textContent = on.length ? `${on.length}건 · ${won(on.reduce((a, c) => a + Number(c.dataset.amt), 0))}원 선택` : `선택 없음 — 누르면 ${document.querySelectorAll('.settleck').length}건 전체`; return; }
   if (t.id === 'cardfiles' && t.files.length) { const fs = [...t.files]; t.value = ''; handleCardFiles(fs); }
   if (t.id === 'bankfile' && t.files.length) { const f = t.files[0]; t.value = ''; handleBankFile(f); }
   if (t.id === 'seedfile' && t.files.length) importSeed(t.files[0]);

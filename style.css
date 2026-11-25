@@ -271,3 +271,5 @@ td.nowrap{white-space:nowrap}
 .hero2 .hero-bar .stack{margin-top:0}
 .hero2 .flow small{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35}
 @media(max-width:1180px){.hero2 .hero-bar{margin-top:0}}
+.settletbl .ckcell{width:34px}.settleck{width:18px;height:18px;accent-color:#17403a;cursor:pointer}
+.settleact{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}

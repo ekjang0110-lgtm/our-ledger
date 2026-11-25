@@ -356,3 +356,49 @@ export function migrateV4(data) {
   master.fixed_cash = (master.fixed_cash || []).map(f => f.allowance && num(f.day) === 1 ? { ...f, day: 10 } : f);
   master.schema = 4; return { master, cardPatches: [], bankPatches: [] };
 }
+
+// ---------- 국민카드 취소 전표 자동 연결
+// 국민카드는 취소가 원 거래와 별도 줄(취소전표매입, 금액 0)로 들어온다. 원 거래를 찾아
+//  - 아직 청구 전(같은 청구 주기)이면 원 거래 금액을 취소액만큼 줄이고(전액이면 0원·취소),
+//  - 이미 청구된 뒤(명세서 마감 후)면 취소 줄을 음수 금액으로 바꿔 다음 청구에서 빼 준다.
+// existing: DB의 같은 카드 줄, parsed: 방금 읽은 파일 줄(이 함수가 금액·취소 여부를 고쳐 둔다), keyOf: 중복 판별 키
+// 반환: 파일에 없는 기존 줄에 적용할 [{ id, patch }]
+export function linkKbCancels(existing, parsed, keyOf) {
+  const items = new Map();
+  existing.forEach(r => items.set(keyOf(r), { db: r, f: null }));
+  parsed.forEach(r => { const k = keyOf(r); const it = items.get(k); if (it) it.f = r; else items.set(k, { db: null, f: r }); });
+  const list = [...items.values()].map(it => { const b = it.f || it.db; return { ...it, status: b.status || '', raw: num(b.raw_amount), date: b.used_date, merchant: b.merchant || '', apr: String(b.approval_no || ''), pay_due: (it.f && it.f.pay_due) || (it.db && it.db.pay_due) || '', ref: (it.db && it.db.cancel_ref) || '', red: 0 }; });
+  const head = m => String(m).split('-')[0].replace(/\s/g, '');
+  const sameShop = (a, b) => { const x = head(a), y = head(b); return x && y && (x === y || x.includes(y) || y.includes(x)); };
+  const days = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const cancels = list.filter(x => /취소전표/.test(x.status) && x.raw > 0).sort((a, b) => a.date.localeCompare(b.date));
+  const origs = list.filter(x => !/취소/.test(x.status) && x.raw > 0 && x.apr);
+  const extra = []; extra.unlinked = []; const patchDb = (it, patch) => { if (it.db && it.db.id) extra.push({ id: it.db.id, patch }); };
+  const asRefund = c => { if (c.f) { c.f.amount = -c.raw; c.f.canceled = false; } };
+  for (const c of cancels) {
+    if (c.ref === 'manual') continue;
+    if (c.ref.startsWith('refund:')) { asRefund(c); continue; }
+    if (c.ref.startsWith('orig:')) { const o = origs.find(x => x.apr === c.ref.slice(5)); if (o) o.red += c.raw; continue; }
+    const pre = o => num((o.db || {}).prepaid);
+    const cand = origs.filter(o => sameShop(o.merchant, c.merchant) && o.date <= c.date && days(o.date, c.date) <= 62 && o.raw - o.red >= c.raw)
+      .sort((a, b) => ((b.raw === c.raw) - (a.raw === c.raw)) || ((b.raw - pre(b) === c.raw) - (a.raw - pre(a) === c.raw)) || b.date.localeCompare(a.date));
+    const exact = o => o.raw === c.raw || o.raw - pre(o) === c.raw;
+    // 부분 취소는 후보가 하나일 때만 자동 연결(여럿이면 잘못 붙을 수 있어 직접 확인하도록 남긴다)
+    const o = cand[0] && (exact(cand[0]) || cand.length === 1) ? cand[0] : null; if (!o) { extra.unlinked.push(c); continue; }
+    const billed = o.pay_due && c.date > `${o.pay_due.slice(0, 7)}-02`; // 명세서는 결제월 초(2일경)에 마감
+    if (billed) {
+      const base = Number(c.date.slice(8)) <= 2 ? c.date.slice(0, 7) : addMonth(c.date.slice(0, 7), 1);
+      const x = { cancel_ref: `refund:${o.apr}`, category: (o.db || {}).category || '', label: `${(o.db || {}).label || head(o.merchant)} 취소 환급`, memo: `${o.date} 결제분이 명세서 마감 후 취소됨 → ${Number(base.slice(5))}월 청구에서 차감` };
+      const pay_due = `${base}-${o.pay_due.slice(8)}`;
+      if (c.f) { asRefund(c); c.f.pay_due = pay_due; c.f._x = x; }
+      patchDb(c, { ...x, amount: -c.raw, canceled: false, pay_due });
+    } else {
+      o.red += c.raw; const x = { cancel_ref: `orig:${o.apr}`, memo: `${o.date} ${head(o.merchant)} 결제 취소 — 원 거래에서 차감` };
+      if (c.f) c.f._x = x; patchDb(c, x);
+    }
+  }
+  for (const o of origs) { if (!o.red) continue; const amt = Math.max(0, o.raw - o.red), canceled = amt === 0;
+    if (o.f) { o.f.amount = amt; o.f.canceled = canceled; }
+    else if (o.db && (num(o.db.amount) !== amt || !!o.db.canceled !== canceled)) patchDb(o, { amount: amt, canceled }); }
+  return extra;
+}
