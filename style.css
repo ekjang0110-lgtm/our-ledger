@@ -273,3 +273,9 @@ td.nowrap{white-space:nowrap}
 @media(max-width:1180px){.hero2 .hero-bar{margin-top:0}}
 .settletbl .ckcell{width:34px}.settleck{width:18px;height:18px;accent-color:#17403a;cursor:pointer}
 .settleact{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+/* v2.18 홈: 남는 돈(예산 포함) 강조, 예산 다 쓰면 */
+.flow>div.hl{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.45)}
+.flow>div.hl b{font-size:1.08em}
+.hero .negt{color:#ffc9b8}
+.hero-main em b{font-weight:800}
+@media(min-width:861px) and (max-width:1560px){.hero2 .flow.n3{gap:6px}}

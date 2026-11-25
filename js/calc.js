@@ -61,7 +61,8 @@ export const mealCat = person => `${person}식대`;
 export function allowance(ctx, person, m) {
   const key = `al:${person}:${m}`; if (ctx.memo[key]) return ctx.memo[key];
   const master = ctx.master; const start = master.start_month || m;
-  const base = sum((master.fixed_cash || []).filter(f => f.allowance && f.person === person), f => f.amount);
+  const alItems = (master.fixed_cash || []).filter(f => f.allowance && f.person === person); const base = sum(alItems, f => f.amount);
+  const viaCard = alItems.some(f => f.via_card); // 이체 없이 카드로 쓰는 용돈(식대처럼 카드 예산에서 차감)
   const meal = budgetFor(master, m, mealCat(person));
   const used = cardCat(ctx, m, '용돈', person), advance = cardCat(ctx, m, '용돈가불', person);
   let prevUsed = 0, prevMeal = 0, prevAdvance = 0, prevCarry = 0;
@@ -71,8 +72,8 @@ export function allowance(ctx, person, m) {
     prevAdvance = cardCat(ctx, pm, '용돈가불', person); prevCarry = monthDiff(start, pm) >= 0 ? allowance(ctx, person, pm).carryOver : 0;
   }
   const cardDeduct = Math.max(0, prevUsed - prevMeal), afterCard = Math.max(0, base - cardDeduct), advDue = prevAdvance + prevCarry;
-  const transfer = Math.max(0, afterCard - advDue);
-  return ctx.memo[key] = { person, base, meal, budget: base + meal, used, advance, prevUsed, prevMeal, cardDeduct, prevAdvance, prevCarry, target: cardDeduct + advDue, transfer, deducted: base - transfer,
+  const pay = Math.max(0, afterCard - advDue), transfer = viaCard ? 0 : pay;
+  return ctx.memo[key] = { person, base, meal, budget: base + meal, viaCard, cardBudget: meal + (viaCard ? pay : 0), used, advance, prevUsed, prevMeal, cardDeduct, prevAdvance, prevCarry, target: cardDeduct + advDue, transfer, deducted: base - pay,
     prevOver: Math.max(0, cardDeduct - base), carryOver: Math.max(0, advDue - afterCard), over: Math.max(0, used - base - meal) };
 }
 
@@ -97,7 +98,8 @@ export function monthSummary(ctx, m, today = todayStr()) {
   const fixedCash = (master.fixed_cash || []).map(f => {
     const transfer = f.allowance ? (al[f.person] ? al[f.person].transfer : num(f.amount)) : num(f.amount);
     const done = ctx.bank.some(b => b.tx_date.slice(0, 7) === m && b.fixed && b.memo === f.name);
-    return { ...f, transfer, done };
+    const viaCard = !!(f.allowance && al[f.person] && al[f.person].viaCard);
+    return { ...f, transfer, done: done || viaCard, viaCard };
   });
   // 월초 일괄 출금(개인통장으로 보낼 고정지출 묶음)은 금액이 ±10% 안의 모임통장 출금이 있으면 완료로 본다
   const lumpItems = fixedCash.filter(f => !f.allowance && f.account !== '모임통장' && f.account !== '현금'), lumpSum = sum(lumpItems, f => f.transfer);
@@ -121,7 +123,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
   // 변동
   const [y, mo] = m.split('-').map(Number); const dim = daysIn(m); const cur = today.slice(0, 7);
   const daysLeft = cur < m ? dim : cur > m ? 0 : dim - Number(today.slice(8, 10)) + 1;
-  const mealCats = persons.map(mealCat); const mealBudgets = persons.map(p => ({ cat: mealCat(p), person: p, budget: al[p].meal, actual: al[p].used })).filter(x => budgetCats(master).includes(x.cat));
+  const mealCats = persons.map(mealCat); const mealBudgets = persons.map(p => ({ cat: mealCat(p), person: p, budget: al[p].cardBudget, actual: al[p].used })).filter(x => budgetCats(master).includes(x.cat));
   const variable = budgetCats(master).filter(c => !mealCats.includes(c)).map(cat => {
     const budget = budgetFor(master, m, cat); const card = cardCat(ctx, m, cat); const bank = bankCat(ctx, m, cat); const actual = card + bank;
     return { cat, budget, card, bank, actual, left: budget - actual, rate: budget ? actual / budget : null, perDay: daysLeft > 0 ? Math.max(0, budget - actual) / daysLeft : null };
@@ -132,8 +134,8 @@ export function monthSummary(ctx, m, today = todayStr()) {
   const misc = sum(rowsM.filter(r => !r.category && !r.fixed), r => r.applied);
   const etc = cardCat(ctx, m, '기타'); const bankMisc = bankCat(ctx, m, '기타'), bankFamily = bankCat(ctx, m, '경조사·가족');
   const cardTotal = sum(rowsM, r => r.applied);
-  const mealTotal = sum(persons, p => al[p].meal);
-  const variableBudget = sum(variable, v => v.budget) + mealTotal, variableActual = sum(variable, v => v.actual) + sum(persons, p => Math.min(al[p].used, al[p].meal));
+  const mealTotal = sum(persons, p => al[p].cardBudget);
+  const variableBudget = sum(variable, v => v.budget) + mealTotal, variableActual = sum(variable, v => v.actual) + sum(persons, p => Math.min(al[p].used, al[p].cardBudget));
   const sharedBudget = sum(variable, v => v.budget), sharedActual = sum(variable, v => v.actual); // 공동 변동예산(개인 식대 제외)
   const prevAllow = sum(persons, p => al[p].deducted);
   const spendPlan = fixedCashTotal + fixedCardBudget + variableBudget + instBudget + prevAllow;
@@ -152,7 +154,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
   const instNext = sum(ctx.cards, c => { const b = cardBill(ctx, addMonth(m, 1), c.name); return b.contInst + b.legacy; });
   const bankSpend = sum(ctx.bank.filter(b => b.tx_date.slice(0, 7) === m && bankGroup(b.category) === '지출' && b.category !== '고정'), b => num(b.withdrawal) - num(b.deposit));
   const open = m >= cur;
-  const remain = !open ? { variable: 0, meal: 0, fixedCard: 0 } : { variable: sum(variable, v => Math.max(0, v.budget - v.actual)), meal: sum(persons, p => Math.max(0, al[p].meal - al[p].used)), fixedCard: sum(fixedCard.filter(f => f.status === '대기'), f => num(f.budget)) };
+  const remain = !open ? { variable: 0, meal: 0, fixedCard: 0 } : { variable: sum(variable, v => Math.max(0, v.budget - v.actual)), meal: sum(persons, p => Math.max(0, al[p].cardBudget - al[p].used)), fixedCard: sum(fixedCard.filter(f => f.status === '대기'), f => num(f.budget)) };
   remain.total = remain.variable + remain.meal + remain.fixedCard;
   const spent = { fixedCash: fixedCashTotal, card: cardTotal, inst: instNext, bank: bankSpend }; spent.total = spent.fixedCash + spent.card + spent.inst + spent.bank;
   const result = { income, spent, remain, open, expense: spent.total + remain.total, left: income - spent.total - remain.total, leftNow: income - spent.total };
