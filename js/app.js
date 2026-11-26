@@ -1,15 +1,15 @@
-import * as C from './calc.js?v=29';
-import { supabaseStore, demoStore } from './store.js?v=29';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=29';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=29';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=29';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=29';
+import * as C from './calc.js?v=30';
+import { supabaseStore, demoStore } from './store.js?v=30';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=30';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=30';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=30';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=30';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
 const LISTS = {};
 const NAV = [['home', '홈', '⌂'], ['cards', '카드', '▤'], ['bank', '통장', '⇄'], ['bills', '카드대금', '₩'], ['fixed', '고정지출', '▣'], ['more', '더보기', '⋯']];
-const MORE = [['budget', '예산', '변동지출 기본 예산과 월별 조정'], ['inst', '할부', '할부 청구 일정'], ['loans', '대출', '잔액과 상환 계획'], ['onnuri', '온누리', '개인 사용 누계·공용 충전 잔액'], ['goals', '목표', '5천만 목표·시나리오·가족행사'], ['tax', '연말정산', '카드공제 예상'], ['trend', '월별 추이', '월별 실적 한눈에'], ['closes', '월 마감 기록', '마감한 달의 숫자 보관'], ['master', '기초 데이터', '통장·카드·수입·고정지출·자동분류'], ['data', '데이터 관리', '가져오기·내보내기·엑셀 대조'], ['audit', '변경 이력', '누가 무엇을 바꿨는지'], ['account', '계정', '초대 코드·로그아웃']];
+const MORE = [['guide', '사용 안내', '처음 쓰는 사람을 위한 쉬운 설명'], ['budget', '예산', '변동지출 기본 예산과 월별 조정'], ['inst', '할부', '할부 청구 일정'], ['loans', '대출', '잔액과 상환 계획'], ['onnuri', '온누리', '개인 사용 누계·공용 충전 잔액'], ['goals', '목표', '5천만 목표·시나리오·가족행사'], ['tax', '연말정산', '카드공제 예상'], ['trend', '월별 추이', '월별 실적 한눈에'], ['closes', '월 마감 기록', '마감한 달의 숫자 보관'], ['master', '기초 데이터', '통장·카드·수입·고정지출·자동분류'], ['data', '데이터 관리', '가져오기·내보내기·엑셀 대조'], ['audit', '변경 이력', '누가 무엇을 바꿨는지'], ['account', '계정', '초대 코드·로그아웃']];
 
 const master = () => S.data.docs.master || {};
 const doc = k => S.data.docs[k];
@@ -544,7 +544,40 @@ function viewBills() {
 // ---------- 더보기
 function viewMore() {
   if (!S.sub) return `<div class="menu">${MORE.map(m => `<a href="#/more/${m[0]}" class="card"><b>${m[1]}</b><small>${m[2]}</small></a>`).join('')}</div>`;
-  return ({ budget: viewBudget, inst: viewInst, loans: viewLoans, onnuri: viewOnnuri, goals: viewGoals, tax: viewTax, trend: viewTrend, closes: viewCloses, master: viewMaster, data: viewData, audit: viewAudit, account: viewAccount })[S.sub]?.() || '';
+  return ({ guide: viewGuide, budget: viewBudget, inst: viewInst, loans: viewLoans, onnuri: viewOnnuri, goals: viewGoals, tax: viewTax, trend: viewTrend, closes: viewCloses, master: viewMaster, data: viewData, audit: viewAudit, account: viewAccount })[S.sub]?.() || '';
+}
+// ---------- 사용 안내(더보기 > 사용 안내): 처음 쓰는 사람도 따라 할 수 있게 쉬운 말로
+function viewGuide() {
+  const step = (items) => `<ol class="gsteps">${items.map(t => `<li>${t}</li>`).join('')}</ol>`;
+  const rows = (items) => `<dl class="grows">${items.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  const g = (n, title, body) => `<section class="card gcard"><h2><i>${n}</i>${title}</h2>${body}</section>`;
+  const chip = t => `<span class="gchip">${t}</span>`;
+  return `<div class="guide">
+  <div class="ghero"><b>우리 둘의 가계부, 이렇게 써요</b><p>카드 내역 파일만 올리면 한 달에 얼마 벌고, 얼마 쓰고, 얼마 남는지 자동으로 계산해 줘요. 아래 순서대로 한 번만 따라 해 보세요.</p>
+    <nav class="gtoc">${[['g1', '시작하기'], ['g2', '홈 읽는 법'], ['g3', '카드 올리고 나누기'], ['g4', '돌려받을 돈'], ['g5', '둘이 같이 쓸 때'], ['g6', '자주 헷갈리는 것']].map(([id, t]) => `<a href="#/more/guide" data-act="guideJump" data-id="${id}">${t}</a>`).join('')}</nav></div>
+  <div class="ggrid">
+  <div id="g1">${g(1, '시작하기', `${step(['크롬(아이폰은 사파리)에서 앱 주소를 열고 <b>로그인</b>해요.', '브라우저 메뉴(⋮ 또는 공유 버튼)에서 <b>"홈 화면에 추가"</b>를 누르면 아이콘으로 바로 열려요.', '"지문·얼굴로 잠금 해제"를 물으면 <b>사용</b>을 눌러요. 다음부터 비밀번호를 안 쳐도 돼요.'])}
+    <p class="gtip"><b>PC에서도 똑같이 써요.</b> 같은 주소로 로그인하면 폰에서 고친 내용이 바로 보여요.</p>
+    <h3>메뉴 6개</h3>${rows([['홈', '이번 달 남는 돈, 예산, 확인할 일을 한눈에'], ['카드', '카드 쓴 내역을 올리고 "식비·낚시…"로 나누는 곳'], ['통장', '모임통장에 들어오고 나간 돈'], ['카드대금', '이번 달 카드값이 얼마 청구되는지'], ['고정지출', '월세·보험·구독처럼 매달 나가는 돈'], ['더보기', '예산, 할부, 대출, 설정, 이 안내']])}
+    <p class="muted small">화면 위 "‹ 2026년 11월 ›"을 누르면 다른 달도 볼 수 있어요.</p>`)}</div>
+  <div id="g2">${g(2, '홈 화면 읽는 법', `<p>숫자가 많아 보여도 볼 건 딱 두 개예요.</p>
+    ${rows([['큰 숫자', '<b>지금 남는 돈.</b> 이번 달 번 돈에서 지금까지 쓴 돈을 뺀 금액이에요.'], ['예산 다 쓰면', '남은 식비·용돈 예산까지 다 썼을 때 남는 돈이에요. <b>▲ 표시가 붙으면 이번 달은 적자 예정</b>이에요.'], ['남은 예산', '이번 달에 아직 더 써도 되는 돈이에요.'], ['용돈 (개인 몫)', '각자 용돈이 얼마 남았는지. 누르면 어디에 썼는지 목록이 나와요.'], ['이달 진행', '위 막대는 날짜, 아래 막대는 같이 쓰는 예산이에요. 아래가 더 길면 돈을 날짜보다 빨리 쓰는 중이에요.'], ['확인할 것', '할 일 목록이에요. 누르면 고칠 화면으로 데려다주고, 처리하면 사라져요.']])}
+    <p class="gtip"><b>밑줄 있는 칸(수입 ›, 쓴 돈 ›, 남은 예산 ›)은 눌러 보세요.</b> 무엇으로 이루어진 숫자인지 자세히 나와요.</p>
+    <p class="muted small">카드는 "긁은 날" 바로 쓴 돈으로 잡혀요. 카드값은 다음 달에 빠져나가지만 장부에서는 쓴 달에 이미 계산했기 때문에, 카드값이 나갈 때 또 빠지지 않아요.</p>`)}</div>
+  <div id="g3">${g(3, '카드 내역 올리고 나누기', `<p>일주일에 한 번 정도, 3분이면 돼요.</p>
+    ${step(['카드사 앱·홈페이지에서 <b>이용내역(승인내역)을 엑셀 파일</b>로 받아요.', '<b>카드</b> 메뉴에서 <b>"카드사 파일 올리기"</b>를 누르고 파일을 골라요. 여러 개를 한 번에 골라도 돼요.', '위쪽에서 <b>"미분류"</b>를 눌러요. 아직 안 나눈 내역만 모여요.', '내역마다 <b>무슨 돈인지 버튼</b>을 눌러요.', '맨 아래 <b>"✔ ○건 반영"</b>을 눌러야 저장돼요. <b>안 누르면 저장이 안 돼요!</b>'])}
+    <p class="gtip"><b>같은 파일을 또 올려도 괜찮아요.</b> 이미 있는 내역은 알아서 빼 줘요. 넷플릭스·배달앱 같은 건 앱이 미리 골라 놓으니 맞는지만 보면 돼요.</p>
+    <h3>버튼 뜻</h3>${rows([[chip('식비'), '같이 먹은 밥, 장보기, 배달'], [chip('낚시'), '낚시 용품, 배, 숙소'], [chip('용돈'), '혼자 쓴 돈 (개인 커피, 점심, 취미)'], [chip('용돈가불'), '용돈을 미리 당겨 쓴 큰돈. 다음 달 용돈에서 빠져요'], [chip('기타'), '위에 안 맞는 같이 쓴 돈'], [chip('고정'), '매달 나가는 돈 (통신비, 구독, 보험)'], [chip('리셀'), '되팔려고 산 물건. 예산에서 빠져요']])}
+    <p class="muted small">여러 건을 한꺼번에 나누려면 왼쪽 네모를 체크(PC는 마우스 오른쪽 버튼)한 뒤 아래 막대에서 분류를 골라요.</p>`)}</div>
+  <div id="g4">${g(4, '돌려받을 돈은 "정산"', `<p>회사 경비나 남의 것을 대신 결제했으면, 카드 메뉴에서 그 내역을 눌러 <b>정산 금액</b>을 적어요. 우리 예산에서는 빠지고, 홈의 <b>"정산 미수"</b>에 받을 돈으로 떠요.</p>
+    ${step(['돈을 받으면 <b>모임통장(월급 통장)</b>에 넣어요.', '홈 "정산 미수"에서 받은 건을 체크하고 <b>"묶어서 받음"</b>을 눌러요.'])}
+    <h3>알아두면 좋은 것</h3>${rows([['취소한 결제', '카드 파일을 다시 올리면 알아서 0원이 돼요.'], ['할부', '매달 내는 금액만 그 달 쓴 돈으로 잡혀요.'], ['큰 지출 나눠 잡기', '일시불로 냈지만 몇 달에 나눠 잡고 싶으면 내역을 눌러 "예산 나눠 반영 개월"에 숫자를 넣어요.']])}`)}</div>
+  <div id="g5">${g(5, '둘이 같이 쓸 때', `<p>둘이 동시에 열어도 돼요. 앱이 알려줘요.</p>
+    <p><span class="gpill"><i></i>○○님이 지금 카드 화면을 수정 중</span><br>상대가 어느 화면을 보고 있는지, 고치는 중인지 화면 위(폰은 아래)에 떠요. <b>같은 화면을 고치는 중이면 잠깐 기다려 주세요.</b></p>
+    <p><span class="gpill dark">○○님이 방금 내용을 바꿨어요 <em>새로 불러오기</em></span><br>상대가 저장하면 내 화면도 자동으로 새 내용으로 바뀌어요. 내가 뭔가 고치는 중이면 이 버튼이 뜨니, 하던 걸 끝내고 눌러요.</p>
+    <p class="gtip warn"><b>이것만은 물어보고 바꿔요.</b> 더보기에 있는 예산·규칙·고정지출 같은 <b>설정</b>은 둘 다에게 바로 적용돼요. 바꾸기 전에 서로 한마디만!</p>`)}</div>
+  <div id="g6">${g(6, '자주 헷갈리는 것', rows([['숫자가 이상해요', '화면을 새로고침하거나 앱을 껐다 켜요.'], ['잘못 나눴어요', '카드 메뉴에서 그 내역을 눌러 다시 고르면 돼요.'], ['반영을 눌렀는데 그대로예요', '각 줄에서 버튼을 고른 뒤 맨 아래 "✔ ○건 반영"까지 눌렀는지 봐요.'], ['누가 바꿨지?', '더보기 › 변경 이력에 다 남아요.'], ['로그인이 풀렸어요', '이메일·비밀번호로 다시 로그인하면 돼요. 내용은 그대로 있어요.']]))}</div>
+  </div></div>`;
 }
 function viewOnnuri() {
   const o = C.onnuriSummary(S.ctx); const ms = master(); const persons = [...new Set((ms.cards || []).map(c => c.person))]; const months = Object.keys(o.byMonth).sort().reverse();
@@ -685,6 +718,7 @@ const ACT = {
   breakdown(el) { breakdownModal(el.dataset.k); },
   logout() { run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
   modalClose() { closeModal(); },
+  guideJump(el, e) { e && e.preventDefault(); document.getElementById(el.dataset.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
   liveReload() { liveReload(); },
   conflictLoad() { const c = S.conflict; if (!c) return; S.data.docs[c.key] = c.theirs; S.conflict = null; closeModal(); rebuild(); render(); toast('최신 내용을 불러왔어요. 필요한 부분만 다시 고쳐 주세요.'); },
   conflictForce() { const c = S.conflict; if (!c) return; S.conflict = null; closeModal(); run(async () => { await S.store.saveDoc(c.key, c.merged, true); S.data.docs[c.key] = c.merged; rebuild(); render(); }, c.msg); },
