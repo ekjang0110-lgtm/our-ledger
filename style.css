@@ -279,3 +279,15 @@ td.nowrap{white-space:nowrap}
 .hero .negt{color:#ffc9b8}
 .hero-main em b{font-weight:800}
 @media(min-width:861px) and (max-width:1560px){.hero2 .flow.n3{gap:6px}}
+/* v2.19 같이 쓰는 사람 표시 */
+#livebar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;max-width:calc(100vw - 24px)}
+#livebar[hidden]{display:none}
+#livebar .lv{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:#fff;border:1px solid #cfd8d4;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:13px;color:#1d2a27;max-width:100%}
+#livebar .lv i{width:9px;height:9px;border-radius:50%;background:#8fb8a8;flex:none}
+#livebar .lv.edit i{background:#e0a23a;box-shadow:0 0 0 0 rgba(224,162,58,.6);animation:lvp 1.6s infinite}
+#livebar .lv.same{border-color:#e0a23a;background:#fff8ea;font-weight:600}
+#livebar .lv.stale{background:#17403a;color:#fff;border-color:#17403a}
+#livebar .lv button{all:unset;cursor:pointer;padding:3px 10px;border-radius:999px;background:#fff;color:#17403a;font-weight:700;font-size:12px}
+@keyframes lvp{70%{box-shadow:0 0 0 7px rgba(224,162,58,0)}100%{box-shadow:0 0 0 0 rgba(224,162,58,0)}}
+@media(prefers-reduced-motion:reduce){#livebar .lv.edit i{animation:none}}
+@media(max-width:860px){#livebar{top:auto;bottom:74px}#livebar .lv{font-size:12px;padding:6px 12px}}

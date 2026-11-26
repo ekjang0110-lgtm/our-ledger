@@ -123,7 +123,7 @@ export function monthSummary(ctx, m, today = todayStr()) {
   // 변동
   const [y, mo] = m.split('-').map(Number); const dim = daysIn(m); const cur = today.slice(0, 7);
   const daysLeft = cur < m ? dim : cur > m ? 0 : dim - Number(today.slice(8, 10)) + 1;
-  const mealCats = persons.map(mealCat); const mealBudgets = persons.map(p => ({ cat: mealCat(p), person: p, budget: al[p].cardBudget, actual: al[p].used })).filter(x => budgetCats(master).includes(x.cat));
+  const mealCats = persons.map(mealCat); const mealBudgets = persons.map(p => ({ cat: mealCat(p), person: p, budget: al[p].meal, actual: al[p].used })).filter(x => budgetCats(master).includes(x.cat));
   const variable = budgetCats(master).filter(c => !mealCats.includes(c)).map(cat => {
     const budget = budgetFor(master, m, cat); const card = cardCat(ctx, m, cat); const bank = bankCat(ctx, m, cat); const actual = card + bank;
     return { cat, budget, card, bank, actual, left: budget - actual, rate: budget ? actual / budget : null, perDay: daysLeft > 0 ? Math.max(0, budget - actual) / daysLeft : null };
@@ -403,4 +403,20 @@ export function linkKbCancels(existing, parsed, keyOf) {
     if (o.f) { o.f.amount = amt; o.f.canceled = canceled; }
     else if (o.db && (num(o.db.amount) !== amt || !!o.db.canceled !== canceled)) patchDb(o, { amount: amt, canceled }); }
   return extra;
+}
+
+// ---------- 설정 문서 3방향 합치기(두 사람이 동시에 저장할 때 덮어쓰기 방지)
+// base: 내가 불러왔던 내용, mine: 내가 저장하려는 내용, theirs: 그 사이 다른 쪽이 저장한 최신 내용
+// 항목(최상위 키)별로 한쪽만 바꿨으면 그쪽 값을 쓰고, 둘 다 바꾼 항목만 충돌로 돌려준다.
+export function mergeDoc(base, mine, theirs) {
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const obj = v => v && typeof v === 'object' && !Array.isArray(v);
+  if (!obj(base) || !obj(mine) || !obj(theirs)) return eq(theirs, base) ? { merged: mine, conflicts: [] } : eq(mine, base) ? { merged: theirs, conflicts: [] } : { merged: mine, conflicts: ['*'] };
+  const merged = {}, conflicts = [];
+  for (const k of new Set([...Object.keys(base), ...Object.keys(mine), ...Object.keys(theirs)])) {
+    const b = base[k], m = mine[k], t = theirs[k]; let v;
+    if (eq(m, b)) v = t; else if (eq(t, b) || eq(t, m)) v = m; else { v = m; conflicts.push(k); }
+    if (v !== undefined) merged[k] = v;
+  }
+  return { merged, conflicts };
 }

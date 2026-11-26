@@ -1,9 +1,9 @@
-import * as C from './calc.js?v=28';
-import { supabaseStore, demoStore } from './store.js?v=28';
-import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=28';
-import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=28';
-import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=28';
-import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=28';
+import * as C from './calc.js?v=29';
+import { supabaseStore, demoStore } from './store.js?v=29';
+import { gridFromBuffer, parseGrid, pickCard, cardKey, parseTossGrid } from './parse.js?v=29';
+import { decryptOffice, isEncryptedOffice } from './decrypt.js?v=29';
+import { bioAvailable, bioEnabled, bioEnable, bioDisable, bioUnlock, bioAsked, markAsked } from './biolock.js?v=29';
+import { esc, won, signed, pct, toNum, fmtDigits, monthLabel, personClass, who, parseDate, dateInput, toast, openModal, closeModal, moneyInput, options, bar, listEditor, readList, addRow } from './ui.js?v=29';
 
 const app = document.querySelector('#app');
 const S = { store: null, session: null, member: null, data: null, ctx: null, month: C.todayStr().slice(0, 7), route: 'home', sub: '', cardFilter: { card: '', kind: '' }, bankFilter: '모임통장', sel: new Set(), bulkCat: '', bankSort: 'desc', billOpen: '', cfOpen: (() => { try { return localStorage.getItem('ol_cfopen') === '1'; } catch { return false; } })(), flash: '', stage: {}, busy: false, authMode: 'in' };
@@ -14,12 +14,54 @@ const MORE = [['budget', '예산', '변동지출 기본 예산과 월별 조정'
 const master = () => S.data.docs.master || {};
 const doc = k => S.data.docs[k];
 function rebuild() { const d = S.data.docs; S.ctx = C.buildCtx({ master: d.master || {}, goals: d.goals || {}, installments: d.installments || [], loans: d.loans || [], tax: d.tax || {}, card_tx: S.data.card_tx, bank_tx: S.data.bank_tx, card_bills: S.data.card_bills }); }
-async function run(fn, okMsg) { if (S.busy) return; S.busy = true; document.body.classList.add('busy'); try { await fn(); if (okMsg) toast(okMsg); } catch (e) { console.error(e); toast(e.message || '오류가 발생했습니다.', true); } finally { S.busy = false; document.body.classList.remove('busy'); } }
-async function saveDoc(key, value, msg = '저장했습니다.') { await run(async () => { await S.store.saveDoc(key, value); S.data.docs[key] = value; rebuild(); render(); }, msg); }
+async function run(fn, okMsg) { if (S.busy) return; S.busy = true; document.body.classList.add('busy'); try { const r = await fn(); if (r !== false) { if (okMsg) toast(okMsg); liveNotify(okMsg); } } catch (e) { console.error(e); toast(e.message || '오류가 발생했습니다.', true); } finally { S.busy = false; document.body.classList.remove('busy'); } }
+const DOCNAME = { master: '기초 설정', goals: '목표', loans: '대출', installments: '할부', tax: '연말정산', meta: '이관 기록' };
+const SECNAME = { fixed_card: '고정지출(카드)', fixed_cash: '고정지출(현금)', rules: '자동분류 규칙', budgets: '예산', cards: '카드', accounts: '통장', incomes: '수입', card_categories: '카드 분류', bank_categories: '통장 분류', onnuri_charges: '온누리 충전', bank_sync: '은행 잔액 확인', flow: '자금 흐름 날짜', '*': '전체' };
+const whoName = uid => { const m = S.member && S.member.members.find(x => x.user_id === uid); return m ? `${m.display_name}님` : '다른 곳(자동 작업 등)'; };
+// 설정 저장: 그 사이 다른 쪽이 저장했으면 항목별로 합치고, 같은 항목을 둘 다 바꿨을 때만 물어본다
+async function saveDoc(key, value, msg = '저장했습니다.') {
+  await run(async () => {
+    try { await S.store.saveDoc(key, value); }
+    catch (e) {
+      if (!e.conflict) throw e;
+      const { merged, conflicts } = C.mergeDoc(S.data.docs[key], value, e.conflict.value);
+      if (conflicts.length) { S.conflict = { key, mine: value, merged, theirs: e.conflict.value, by: whoName(e.conflict.updated_by), conflicts, msg }; conflictModal(); return false; }
+      await S.store.saveDoc(key, merged); value = merged; msg = `${msg} (${whoName(e.conflict.updated_by)}이 바꾼 내용과 합쳤어요)`;
+    }
+    S.data.docs[key] = value; rebuild(); render(); toast(msg); liveNotify(msg); return false;
+  });
+}
+function conflictModal() { const c = S.conflict; openModal(`<h2>⚠ ${esc(c.by)}이 방금 같은 설정을 바꿨어요</h2><p class="muted">${esc(DOCNAME[c.key] || c.key)} 중 <b>${c.conflicts.map(k => esc(SECNAME[k] || k)).join(', ')}</b>을(를) 두 곳에서 다르게 고쳤습니다. 어느 쪽을 남길지 골라 주세요. 다른 항목은 양쪽 내용을 모두 살립니다.</p>
+  <div class="actions"><button class="btn ghost" data-act="conflictLoad">최신 내용 불러오기</button><button class="btn" data-act="conflictForce">내 것으로 저장</button></div><p class="muted small">"최신 내용 불러오기"를 누르면 방금 고친 ${c.conflicts.map(k => esc(SECNAME[k] || k)).join(', ')}은(는) 저장되지 않습니다.</p>`); }
+
+// ---------- 같이 쓰는 사람 표시(누가 어느 화면을 보고·수정하는지) + 상대가 저장하면 최신 내용 불러오기
+const viewName = () => S.route === 'more' && S.sub ? `더보기 > ${(MORE.find(m => m[0] === S.sub) || [])[1] || ''}` : (NAV.find(n => n[0] === S.route) || [])[1];
+const isEditing = () => { const a = document.activeElement; return !!document.querySelector('.modal') || S.sel.size > 0 || Object.values(S.stage).some(x => x && !x.auto && (x.category || x.fixed || x.memo)) || !!(a && a.closest && a.closest('.content') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'monthpick'); };
+let liveT = 0;
+function livePing() { if (!S.live) return; clearTimeout(liveT); liveT = setTimeout(() => { const editing = isEditing(); S.live.track({ name: S.member.me?.display_name || '', view: viewName(), editing, at: Date.now() }); if (S.stale && !editing && !S.busy) liveReload(); }, 600); }
+function liveNotify(msg) { if (S.live && S.member) S.live.notify({ by: S.member.me?.display_name || '', msg: msg || '' }); }
+function liveStart() {
+  if (S.live || !S.store.live || !S.member) return;
+  S.live = S.store.live(S.session.user.id, {
+    onPeers(list) { S.peers = list.filter(p => p.key !== S.session.user.id && p.name); liveBar(); },
+    onChanged(p) { S.stale = { by: p.by || '상대방' }; if (!isEditing() && !S.busy) liveReload(); else liveBar(); },
+  });
+  ['focusin', 'focusout', 'click', 'hashchange'].forEach(ev => (ev === 'hashchange' ? window : document).addEventListener(ev, livePing, true));
+  livePing();
+}
+async function liveReload() { const by = S.stale && S.stale.by; S.stale = null; try { S.data = await S.store.loadAll(); rebuild(); keepScroll(); if (by) toast(`${by}님이 바꾼 내용을 불러왔어요.`); } catch (e) { console.warn(e); } liveBar(); }
+function liveBar() {
+  let el = document.querySelector('#livebar'); if (!el) { el = document.createElement('div'); el.id = 'livebar'; el.setAttribute('aria-live', 'polite'); document.body.append(el); }
+  const here = viewName();
+  const peers = (S.peers || []).map(p => `<span class="lv ${p.editing ? 'edit' : ''} ${p.editing && p.view === here ? 'same' : ''}"><i></i>${esc(p.name)}님이 지금 <b>${esc(p.view || '')}</b> 화면을 ${p.editing ? '수정 중' : '보는 중'}</span>`).join('');
+  const stale = S.stale ? `<span class="lv stale">${esc(S.stale.by)}님이 방금 내용을 바꿨어요 <button data-act="liveReload">새로 불러오기</button></span>` : '';
+  el.innerHTML = peers + stale; el.hidden = !(peers || stale);
+}
 
 // ---------- 시작
 async function boot() {
   const q = new URLSearchParams(location.search);
+  if (q.has('demo')) window.__S = S;
   if (q.has('demo')) { const seed = await (await fetch(q.get('demo') || './seed.json')).json(); S.store = demoStore(seed); }
   else S.store = supabaseStore();
   S.store.onAuth((ev) => { if (ev === 'SIGNED_OUT') { S.session = null; S.member = null; S.data = null; render(); } });
@@ -36,7 +78,7 @@ async function enter() {
     S.member = await S.store.membership(); if (!S.member) return render();
     S.data = await S.store.loadAll(); await migrate(); rebuild();
     const months = C.monthsWithData(S.ctx); if (!months.length && !S.data.docs.master) { location.hash = '#/more/data'; }
-    render(); setTimeout(offerBio, 800);
+    render(); liveStart(); setTimeout(offerBio, 800);
   } catch (e) { console.error(e); app.innerHTML = `<div class="boot">연결하지 못했습니다.<br><small>${esc(e.message)}</small><br><button class="btn" onclick="location.reload()">다시 시도</button></div>`; }
 }
 
@@ -643,6 +685,9 @@ const ACT = {
   breakdown(el) { breakdownModal(el.dataset.k); },
   logout() { run(async () => { bioDisable(); await S.store.signOut(); S.session = null; S.member = null; S.data = null; render(); }); },
   modalClose() { closeModal(); },
+  liveReload() { liveReload(); },
+  conflictLoad() { const c = S.conflict; if (!c) return; S.data.docs[c.key] = c.theirs; S.conflict = null; closeModal(); rebuild(); render(); toast('최신 내용을 불러왔어요. 필요한 부분만 다시 고쳐 주세요.'); },
+  conflictForce() { const c = S.conflict; if (!c) return; S.conflict = null; closeModal(); run(async () => { await S.store.saveDoc(c.key, c.merged, true); S.data.docs[c.key] = c.merged; rebuild(); render(); }, c.msg); },
   todo(el) { closeModal(); S.flash = el.dataset.flash || ''; if (el.dataset.kind !== undefined) S.cardFilter = { card: '', kind: el.dataset.kind }; },
   cfToggle(el) { S.cfOpen = !S.cfOpen; const t = el.closest('table'); t.classList.toggle('cfopen', S.cfOpen); el.setAttribute('aria-expanded', S.cfOpen ? 'true' : 'false'); el.querySelector('.cfx').textContent = S.cfOpen ? '▾ 지난 내역 접기' : '▸ 지난 내역 펼치기'; try { localStorage.setItem('ol_cfopen', S.cfOpen ? '1' : ''); } catch {} },
   billOpen(el) { S.billOpen = S.billOpen === el.dataset.card ? '' : el.dataset.card; const y = window.scrollY; render(); window.scrollTo(0, y); },
