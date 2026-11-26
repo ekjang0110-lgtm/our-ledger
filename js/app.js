@@ -38,12 +38,17 @@ function conflictModal() { const c = S.conflict; openModal(`<h2>⚠ ${esc(c.by)}
 const viewName = () => S.route === 'more' && S.sub ? `더보기 > ${(MORE.find(m => m[0] === S.sub) || [])[1] || ''}` : (NAV.find(n => n[0] === S.route) || [])[1];
 const isEditing = () => { const a = document.activeElement; return !!document.querySelector('.modal') || S.sel.size > 0 || Object.values(S.stage).some(x => x && !x.auto && (x.category || x.fixed || x.memo)) || !!(a && a.closest && a.closest('.content') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.id !== 'monthpick'); };
 let liveT = 0;
-function livePing() { if (!S.live) return; clearTimeout(liveT); liveT = setTimeout(() => { const editing = isEditing(); S.live.track({ name: S.member.me?.display_name || '', view: viewName(), editing, at: Date.now() }); if (S.stale && !editing && !S.busy) liveReload(); }, 600); }
+// 상태(화면·수정 중)가 바뀔 때만, 3초에 한 번 이내로 보낸다(너무 자주 보내면 서버가 막는다)
+let liveSent = '', liveAt = 0;
+function livePing() { if (!S.live) return; clearTimeout(liveT); liveT = setTimeout(() => { const editing = isEditing(); const st = { name: S.member.me?.display_name || '', view: viewName(), editing }; const key = JSON.stringify(st);
+  if (key !== liveSent) { const wait = 3000 - (Date.now() - liveAt); if (wait > 0) { liveT = setTimeout(livePing, wait + 50); } else { liveSent = key; liveAt = Date.now(); S.live.track(st); } S.me = st; liveBar(); }
+  if (S.stale && !editing && !S.busy) liveReload(); }, 600); }
 function liveNotify(msg) { if (S.live && S.member) S.live.notify({ by: S.member.me?.display_name || '', msg: msg || '' }); }
 function liveStart() {
   if (S.live || !S.store.live || !S.member) return;
   S.live = S.store.live(S.session.user.id, {
     onPeers(list) { S.peers = list.filter(p => p.key !== S.session.user.id && p.name); liveBar(); },
+    onStatus(st) { S.liveStatus = st; liveBar(); },
     onChanged(p) { S.stale = { by: p.by || '상대방' }; if (!isEditing() && !S.busy) liveReload(); else liveBar(); },
   });
   ['focusin', 'focusout', 'click', 'hashchange'].forEach(ev => (ev === 'hashchange' ? window : document).addEventListener(ev, livePing, true));
@@ -52,10 +57,15 @@ function liveStart() {
 async function liveReload() { const by = S.stale && S.stale.by; S.stale = null; try { S.data = await S.store.loadAll(); rebuild(); keepScroll(); if (by) toast(`${by}님이 바꾼 내용을 불러왔어요.`); } catch (e) { console.warn(e); } liveBar(); }
 function liveBar() {
   let el = document.querySelector('#livebar'); if (!el) { el = document.createElement('div'); el.id = 'livebar'; el.setAttribute('aria-live', 'polite'); document.body.append(el); }
-  const here = viewName();
-  const peers = (S.peers || []).map(p => `<span class="lv ${p.editing ? 'edit' : ''} ${p.editing && p.view === here ? 'same' : ''}"><i></i>${esc(p.name)}님이 지금 <b>${esc(p.view || '')}</b> 화면을 ${p.editing ? '수정 중' : '보는 중'}</span>`).join('');
+  if (!S.member || !S.data) { el.hidden = true; return; }
+  const here = viewName(), me = S.me || { view: here, editing: false }, st = S.liveStatus || 'wait';
+  const others = S.member.members.filter(m => m.user_id !== S.session.user.id);
+  const peerOf = m => (S.peers || []).find(p => p.key === m.user_id);
+  const mine = `<span class="lv me ${st}"><i></i>${st === 'on' ? `나(${esc(S.member.me?.display_name || '')}) · <b>${esc(me.view || here)}</b> ${me.editing ? '수정 중' : '보는 중'}` : st === 'wait' ? '실시간 연결 중…' : '실시간 연결 끊김 — 새로고침해 주세요'}</span>`;
+  const pres = S.peers || [], lv = (name, p) => `<span class="lv ${p.editing ? 'edit' : ''} ${p.editing && p.view === here ? 'same' : ''}"><i></i>${esc(name)}님 · <b>${esc(p.view || '')}</b> ${p.editing ? '수정 중' : '보는 중'}</span>`;
+  const peers = st === 'on' ? pres.map(p => lv((others.find(m => m.user_id === p.key) || {}).display_name || p.name, p)).join('') + others.filter(m => !pres.some(p => p.key === m.user_id || p.name === m.display_name)).map(m => `<span class="lv away"><i></i>${esc(m.display_name)}님 접속 안 함</span>`).join('') : '';
   const stale = S.stale ? `<span class="lv stale">${esc(S.stale.by)}님이 방금 내용을 바꿨어요 <button data-act="liveReload">새로 불러오기</button></span>` : '';
-  el.innerHTML = peers + stale; el.hidden = !(peers || stale);
+  el.innerHTML = `<div class="lvrow">${mine}${peers}</div>${stale}`; el.hidden = false;
 }
 
 // ---------- 시작
@@ -194,10 +204,10 @@ function render() {
   const monthless = S.route === 'more' && !['budget', 'inst', 'loans'].includes(S.sub);
   app.innerHTML = `<div class="shell">
   <aside class="side"><div class="brand"><b>우리의 장부</b><small>${esc(S.member.household.name)}</small></div>
-    <nav>${NAV.map(n => `<a href="#/${n[0]}" class="${S.route === n[0] ? 'on' : ''}"><i>${n[2]}</i>${n[1]}</a>`).join('')}</nav>
+    <nav>${(() => { const pn = pins(), inPin = S.route === 'more' && pn.includes(S.sub); return NAV.map(n => `<a href="#/${n[0]}" class="${S.route === n[0] && !(n[0] === 'more' && inPin) ? 'on' : ''}"><i>${n[2]}</i>${n[1]}</a>`).join('') + (pn.length ? `<div class="pinsep">내 메뉴</div>` + pn.map(k => { const m = MORE.find(x => x[0] === k); return `<a href="#/more/${k}" class="pin ${S.route === 'more' && S.sub === k ? 'on' : ''}" draggable="true" data-pin="${k}"><i>★</i><span>${m[1]}</span><button data-act="pinToggle" data-k="${k}" aria-label="${m[1]} 고정 해제" title="고정 해제">×</button></a>`; }).join('') : ''); })()}</nav>
     <div class="sidefoot">${esc(S.member.me?.display_name || '')} · <a href="#/more/account">계정</a></div></aside>
   <main><header class="top"><div class="ttl">${S.route === 'more' && S.sub ? '<a class="back" href="#/more">‹</a>' : ''}<h1>${esc(title)}</h1></div>
-    ${monthless ? '' : `<div class="monthnav"><button data-act="month" data-d="-1" aria-label="이전 달">‹</button><label><input type="month" id="monthpick" value="${S.month}"><span>${monthLabel(S.month)}</span></label><button data-act="month" data-d="1" aria-label="다음 달">›</button></div>`}</header>
+    ${monthless ? '' : `<div class="monthnav"><button data-act="month" data-d="-1" aria-label="이전 달">‹</button><label><input type="month" id="monthpick" value="${S.month}"><span>${monthLabel(S.month)}</span></label><button data-act="month" data-d="1" aria-label="다음 달">›</button></div>${S.route === 'home' ? (() => { const c = S.data.closes.find(x => x.month === S.month); return `<button class="closebtn ${c ? 'done' : ''}" data-act="closeMonth" title="${c ? `마감 저장: ${c.closed_at.slice(0, 10)} · 누르면 지금 숫자로 다시 저장` : '이 달 숫자를 지금 값으로 보관합니다'}">${c ? '✔ 마감됨' : '월 마감'}</button>`; })() : ''}`}</header>
     <div class="content">${body}</div></main>
   <nav class="tabbar">${NAV.map(n => `<a href="#/${n[0]}" class="${S.route === n[0] ? 'on' : ''}"><i>${n[2]}</i>${n[1]}</a>`).join('')}</nav></div>`;
   const mp = document.querySelector('#monthpick'); if (mp) mp.onchange = () => { if (mp.value) { S.month = mp.value; render(); } };
@@ -296,7 +306,7 @@ function viewHome() {
   ${unsettled.length ? sec(`정산 미수 ${unsettled.length}건 · ${won(unsettled.reduce((a, r) => a + r.settle, 0))}원`, `<p class="muted small">받은 돈은 모임통장(월급 통장)에 넣습니다. 받은 건을 체크하고 한 번에 "받음" 처리하세요.</p><table class="tbl settletbl"><tbody>${unsettled.map(r => `<tr><td class="c ckcell"><input type="checkbox" class="settleck" data-id="${r.id}" data-amt="${r.settle}" aria-label="선택"></td><td>${who(r.person)}${esc(r.label || r.merchant)}<br><small class="muted">${r.used_date} · ${esc(r.card)}${r.memo ? ' · ' + esc(r.memo) : ''}</small></td><td class="r">${won(r.settle)}</td><td class="c"><button class="btn ghost sm" data-act="settleDone" data-id="${r.id}">받음</button></td></tr>`).join('')}</tbody></table><div class="actions settleact"><span class="muted small" id="settleSum">선택 없음 — 누르면 ${unsettled.length}건 전체</span><button class="btn" data-act="settleBulk">묶어서 받음</button></div>`) : ''}
   ${s.events.length ? sec('이번 달 가족행사', s.events.map(e => `<div class="line"><span>${esc(e.event)} (${esc(e.target)})</span><b>${won(e.amount)}</b></div>`).join('')) : ''}
   </div></div>
-  <div class="row gap end"><span class="muted small">${closed ? `마감 저장: ${closed.closed_at.slice(0, 10)}` : '아직 마감하지 않은 달입니다.'}</span><button class="btn ghost" data-act="closeMonth">${closed ? '마감 다시 저장' : '월 마감 저장'}</button></div>`;
+`;
 }
 function viewFixed() {
   const m = S.month, s = C.monthSummary(S.ctx, m); const doneN = s.fixedCash.filter(f => f.done).length, wait = s.fixedCard.filter(f => f.status === '대기').length;
@@ -541,9 +551,18 @@ function viewBills() {
     <div class="legend sm"><span><i class="lump"></i>일시불 (진한 색)</span><span><i class="inst"></i>할부 (빗금)</span><span class="muted">청구월을 누르면 화면 위쪽 월이 그 달로 바뀌어, 그 달의 청구 상세(위 표)를 볼 수 있습니다. 앞으로의 달은 지금까지 승인된 건 기준입니다.</span></div>`)}
   <div>${sec('일시불 계산', `<table class="tbl"><thead><tr><th>카드</th><th class="r">일시불 승인</th><th class="r">선결제</th><th class="r">일시불 청구</th></tr></thead><tbody>${s.bills.map(b => `<tr><td>${who(b.person)}${esc(b.card)}</td><td class="r">${won(b.lump)}</td><td class="r">${b.prepaid ? '−' + won(b.prepaid) : ''}</td><td class="r"><b>${won(b.lumpNet)}</b></td></tr>`).join('')}</tbody></table><p class="muted small">${monthLabel(C.addMonth(m, -1))} 사용분입니다(국민카드는 결제예정일 기준).</p>`)}</div>`;
 }
-// ---------- 더보기
+// ---------- 더보기 (자주 쓰는 메뉴는 왼쪽 메뉴에 고정 — 이 기기에만 저장)
+const pins = () => { try { return JSON.parse(localStorage.getItem('ol_pins') || '[]').filter(k => MORE.some(m => m[0] === k)); } catch { return []; } };
+const setPins = a => { try { localStorage.setItem('ol_pins', JSON.stringify([...new Set(a)])); } catch { } render(); };
+function pinDrop(k, beforeK) { if (!MORE.some(m => m[0] === k)) return; const a = pins().filter(x => x !== k); const i = beforeK && beforeK !== k ? a.indexOf(beforeK) : -1; if (i >= 0) a.splice(i, 0, k); else a.push(k); setPins(a); }
+document.addEventListener('dragstart', e => { const el = e.target.closest && e.target.closest('[data-pin]'); if (!el) return; e.dataTransfer.setData('text/plain', 'pin:' + el.dataset.pin); e.dataTransfer.effectAllowed = 'move'; document.body.classList.add('pindrag'); });
+document.addEventListener('dragend', () => { document.body.classList.remove('pindrag'); document.querySelectorAll('.dropat').forEach(x => x.classList.remove('dropat')); });
+document.addEventListener('dragover', e => { if (!document.body.classList.contains('pindrag')) return; const side = e.target.closest && e.target.closest('.side'); if (!side) return; e.preventDefault(); document.querySelectorAll('.dropat').forEach(x => x.classList.remove('dropat')); const a = e.target.closest('.side a[data-pin]'); if (a) a.classList.add('dropat'); });
+document.addEventListener('drop', e => { const side = e.target.closest && e.target.closest('.side'); const d = e.dataTransfer && e.dataTransfer.getData('text/plain'); document.body.classList.remove('pindrag'); if (!side || !d || !d.startsWith('pin:')) return; e.preventDefault(); const a = e.target.closest('.side a[data-pin]'); pinDrop(d.slice(4), a ? a.dataset.pin : ''); });
 function viewMore() {
-  if (!S.sub) return `<div class="menu">${MORE.map(m => `<a href="#/more/${m[0]}" class="card"><b>${m[1]}</b><small>${m[2]}</small></a>`).join('')}</div>`;
+  if (!S.sub) { const pn = pins(); const list = [...pn.map(k => MORE.find(m => m[0] === k)), ...MORE.filter(m => !pn.includes(m[0]))];
+    return `<p class="muted small pinhelp"><span class="hide-s">자주 쓰는 메뉴는 <b>왼쪽 메뉴로 끌어다 놓거나</b> ☆를 누르면 왼쪽에 고정됩니다. 왼쪽에서 다시 끌면 순서도 바뀝니다.</span><span class="show-s">☆를 누르면 자주 쓰는 메뉴가 맨 위로 올라옵니다.</span> <small>(이 기기에만 저장)</small></p>
+    <div class="menu">${list.map(m => { const on = pn.includes(m[0]); return `<a href="#/more/${m[0]}" class="card ${on ? 'pinned' : ''}" draggable="true" data-pin="${m[0]}"><b>${m[1]}</b><small>${m[2]}</small><button class="pinbtn ${on ? 'on' : ''}" data-act="pinToggle" data-k="${m[0]}" aria-pressed="${on}" aria-label="${m[1]} ${on ? '고정 해제' : '왼쪽 메뉴에 고정'}" title="${on ? '고정 해제' : '왼쪽 메뉴에 고정'}">${on ? '★' : '☆'}</button></a>`; }).join('')}</div>`; }
   return ({ guide: viewGuide, budget: viewBudget, inst: viewInst, loans: viewLoans, onnuri: viewOnnuri, goals: viewGoals, tax: viewTax, trend: viewTrend, closes: viewCloses, master: viewMaster, data: viewData, audit: viewAudit, account: viewAccount })[S.sub]?.() || '';
 }
 // ---------- 사용 안내(더보기 > 사용 안내): 처음 쓰는 사람도 따라 할 수 있게 쉬운 말로
@@ -769,6 +788,7 @@ const ACT = {
         S.data.bank_tx.push(...await S.store.insertBank([{ tx_date: `${S.month}-${day}`, account: tracked ? f.account : '모임통장', memo: f.name, deposit: 0, withdrawal: f.transfer, category: '고정', fixed: true, note: tracked ? '' : `→ ${f.account}`, source: 'check' }])); }
       rebuild(); render();
     }); },
+  pinToggle(el) { const k = el.dataset.k, a = pins(); setPins(a.includes(k) ? a.filter(x => x !== k) : [...a, k]); },
   closeMonth() { if (!confirm(`${monthLabel(S.month)} 숫자를 지금 값으로 마감 저장할까요?`)) return; run(async () => { const row = await S.store.saveClose(S.month, closeSnapshot(S.month), ''); S.data.closes = S.data.closes.filter(c => c.month !== S.month).concat(row); render(); }, '마감을 저장했습니다.'); },
   rowAdd(el) { addRow(el.dataset.target, LISTS[el.dataset.target].cols); },
   rowDel(el) { el.closest('tr').remove(); },

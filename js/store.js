@@ -51,7 +51,7 @@ export function supabaseStore() {
         const ch = sb.channel(`ledger-${hid}`, { config: { presence: { key: uid }, broadcast: { self: false } } });
         ch.on('presence', { event: 'sync' }, () => { const st = ch.presenceState(); h.onPeers(Object.entries(st).map(([key, metas]) => ({ key, ...metas[metas.length - 1] }))); })
           .on('broadcast', { event: 'changed' }, ({ payload }) => h.onChanged(payload))
-          .subscribe(status => { if (status === 'SUBSCRIBED') { ready = true; if (state) ch.track(state); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') ready = false; });
+          .subscribe(status => { if (status === 'SUBSCRIBED') { ready = true; if (state) ch.track(state); } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') ready = false; if (h.onStatus) h.onStatus(status === 'SUBSCRIBED' ? 'on' : status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' ? 'err' : status === 'CLOSED' ? 'off' : 'wait'); });
         return { track(s) { state = s; if (ready) ch.track(s).catch(() => { }); }, notify(p) { if (ready) ch.send({ type: 'broadcast', event: 'changed', payload: p }).catch(() => { }); } };
       } catch (e) { console.warn('live', e); return null; }
     },
@@ -85,6 +85,7 @@ export function demoStore(seed) {
       const emit = () => h.onPeers([...peers.entries()].filter(([, v]) => Date.now() - v.at < 6000).map(([key, v]) => ({ key, ...v.s })));
       bc.onmessage = e => { const m = e.data; if (m.from === me) return; if (m.t === 'state') { peers.set(m.from, { s: m.s, at: Date.now() }); emit(); } else if (m.t === 'bye') { peers.delete(m.from); emit(); } else if (m.t === 'changed') h.onChanged(m.p); };
       setInterval(() => { if (state) bc.postMessage({ t: 'state', from: me, s: state }); emit(); }, 2000); addEventListener('pagehide', () => bc.postMessage({ t: 'bye', from: me }));
+      setTimeout(() => h.onStatus && h.onStatus('on'), 300);
       return { track(s) { state = s; bc.postMessage({ t: 'state', from: me, s }); }, notify(p) { bc.postMessage({ t: 'changed', from: me, p }); } }; },
     async insertCards(rows) { const out = rows.map(r => ({ ...pick(r, CARD_COLS), ...cardDefaults(r), id: id++ })); db.card_tx.push(...out); return structuredClone(out); },
     async updateCard(i, patch) { const r = db.card_tx.find(x => x.id === i); const before = { ...r }; Object.assign(r, pick(patch, CARD_COLS)); log.unshift({ id: log.length + 1, tbl: 'ledger_card_tx', row_id: String(i), action: 'update', actor: 'demo', before, after: { ...r }, at: new Date().toISOString() }); return { ...r }; },

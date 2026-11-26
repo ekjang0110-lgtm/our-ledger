@@ -280,17 +280,39 @@ td.nowrap{white-space:nowrap}
 .hero-main em b{font-weight:800}
 @media(min-width:861px) and (max-width:1560px){.hero2 .flow.n3{gap:6px}}
 /* v2.19 같이 쓰는 사람 표시 */
-#livebar{position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;max-width:calc(100vw - 24px)}
+#livebar{position:fixed;right:16px;bottom:14px;z-index:60;display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none;max-width:calc(100vw - 24px)}
 #livebar[hidden]{display:none}
-#livebar .lv{pointer-events:auto;display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:#fff;border:1px solid #cfd8d4;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:13px;color:#1d2a27;max-width:100%}
-#livebar .lv i{width:9px;height:9px;border-radius:50%;background:#8fb8a8;flex:none}
+#livebar .lvrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+#livebar .lv{pointer-events:auto;display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;background:#fff;border:1px solid #cfd8d4;box-shadow:0 4px 14px rgba(0,0,0,.12);font-size:12.5px;color:#1d2a27;max-width:100%}
+#livebar .lv b{font-weight:600}
+#livebar .lv i{width:9px;height:9px;border-radius:50%;background:#2e9c7a;flex:none}
+#livebar .lv.me{background:#f3f7f5;color:#4a5a55}
+#livebar .lv.me.wait i{background:#c9b458}#livebar .lv.me.err i,#livebar .lv.me.off i{background:#c8483f}
+#livebar .lv.me.err,#livebar .lv.me.off{background:#fdeeed;border-color:#e6b3ae;color:#8c2a23;font-weight:600}
+#livebar .lv.away{color:#7b8a85}#livebar .lv.away i{background:#c4cdc9}
 #livebar .lv.edit i{background:#e0a23a;box-shadow:0 0 0 0 rgba(224,162,58,.6);animation:lvp 1.6s infinite}
-#livebar .lv.same{border-color:#e0a23a;background:#fff8ea;font-weight:600}
+#livebar .lv.edit{border-color:#e0a23a;background:#fff8ea}
+#livebar .lv.same{font-weight:700}
 #livebar .lv.stale{background:#17403a;color:#fff;border-color:#17403a}
 #livebar .lv button{all:unset;cursor:pointer;padding:3px 10px;border-radius:999px;background:#fff;color:#17403a;font-weight:700;font-size:12px}
 @keyframes lvp{70%{box-shadow:0 0 0 7px rgba(224,162,58,0)}100%{box-shadow:0 0 0 0 rgba(224,162,58,0)}}
 @media(prefers-reduced-motion:reduce){#livebar .lv.edit i{animation:none}}
-@media(max-width:860px){#livebar{top:auto;bottom:74px}#livebar .lv{font-size:12px;padding:6px 12px}}
+@media(max-width:860px){#livebar{right:8px;left:8px;bottom:calc(70px + env(safe-area-inset-bottom));align-items:center}#livebar .lvrow{justify-content:center}#livebar .lv{font-size:11.5px;padding:5px 10px}main{padding-bottom:44px}}
+/* v2.21 월 마감 버튼(머리글) · 내 메뉴 고정 */
+.top .closebtn{margin-left:8px;border:1px solid var(--brand);background:var(--brand);color:#fff;border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap;box-shadow:var(--sh)}
+.top .closebtn.done{background:var(--card);color:var(--brand)}
+.top .ttl{margin-right:auto}
+.pinsep{font-size:11px;opacity:.6;padding:12px 12px 4px;letter-spacing:.04em}
+.side nav a.pin span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.side nav a.pin button{all:unset;cursor:pointer;width:22px;height:22px;text-align:center;line-height:22px;border-radius:6px;opacity:0;font-size:15px}
+.side nav a.pin:hover button,.side nav a.pin button:focus-visible{opacity:.8}.side nav a.pin button:hover{background:rgba(0,0,0,.15);opacity:1}
+.side nav a.dropat{box-shadow:inset 0 2px 0 #fff}
+body.pindrag .side{outline:2px dashed rgba(255,255,255,.55);outline-offset:-6px}
+.menu a{position:relative;padding-right:40px}.menu a[draggable]{cursor:grab}
+.pinbtn{all:unset;position:absolute;top:8px;right:8px;width:30px;height:30px;text-align:center;line-height:30px;border-radius:8px;font-size:17px;color:var(--mut);cursor:pointer}
+.pinbtn:hover{background:var(--bg)}.pinbtn.on{color:#d99a1c}.pinbtn:focus-visible{outline:2px solid var(--brand2)}
+.menu a.pinned{border-color:#e6cf9a}.pinhelp{margin:0}
+@media(max-width:860px){.top .closebtn{padding:6px 10px;font-size:12.5px;margin-left:6px}}
 /* v2.20 사용 안내 */
 .guide{display:grid;gap:14px;max-width:1180px}
 .ghero{background:linear-gradient(135deg,#1f5248,#17403a);color:#fff;border-radius:18px;padding:22px 24px}
